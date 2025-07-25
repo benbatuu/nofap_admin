@@ -1,91 +1,34 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { TrendingUp, Users, DollarSign, ShoppingCart, Eye, Clock, Target, Zap, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, 
+import { useStatistics } from '@/hooks/use-api';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   RadialBarChart, RadialBar, ComposedChart
 } from 'recharts';
 
-const Skeleton = ({ className = "" }) => {
-  return (
-    <div className={`animate-pulse bg-gradient-to-r from-muted via-muted/50 to-muted rounded-md ${className}`} />
-  );
+// Icon mapping for dynamic data
+const iconMap = {
+  DollarSign,
+  Users,
+  ShoppingCart,
+  Eye,
+  TrendingUp,
+  Clock,
+  Target,
+  Zap
 };
 
-// Enhanced data with more variety
-const keyMetrics = [
-  { title: "Total Revenue", value: "$54,239", change: "+12.5%", icon: DollarSign, trend: "up", color: "text-green-500" },
-  { title: "Active Users", value: "8,432", change: "+18.2%", icon: Users, trend: "up", color: "text-blue-500" },
-  { title: "Orders", value: "1,247", change: "-2.3%", icon: ShoppingCart, trend: "down", color: "text-red-500" },
-  { title: "Page Views", value: "32,156", change: "+24.1%", icon: Eye, trend: "up", color: "text-purple-500" }
-];
-
-const revenueData = [
-  { month: "Jan", revenue: 4000, profit: 2800, users: 240 },
-  { month: "Feb", revenue: 3000, profit: 1800, users: 220 },
-  { month: "Mar", revenue: 5000, profit: 3500, users: 290 },
-  { month: "Apr", revenue: 4500, profit: 3200, users: 270 },
-  { month: "May", revenue: 6000, profit: 4200, users: 320 },
-  { month: "Jun", revenue: 5500, profit: 3900, users: 310 },
-  { month: "Jul", revenue: 7000, profit: 5000, users: 380 },
-  { month: "Aug", revenue: 6500, profit: 4600, users: 360 },
-  { month: "Sep", revenue: 8000, profit: 5800, users: 420 },
-  { month: "Oct", revenue: 7500, profit: 5400, users: 400 },
-  { month: "Nov", revenue: 9000, profit: 6500, users: 480 },
-  { month: "Dec", revenue: 8500, profit: 6200, users: 460 }
-];
-
-const categoryData = [
-  { name: "Electronics", value: 4500, color: "#8b5cf6", percentage: 35 },
-  { name: "Clothing", value: 3200, color: "#06b6d4", percentage: 25 },
-  { name: "Books", value: 2100, color: "#10b981", percentage: 16 },
-  { name: "Home & Garden", value: 1800, color: "#f59e0b", percentage: 14 },
-  { name: "Sports", value: 1300, color: "#ef4444", percentage: 10 }
-];
-
-const trafficData = [
-  { name: "Desktop", value: 45, color: "#8b5cf6" },
-  { name: "Mobile", value: 35, color: "#06b6d4" },
-  { name: "Tablet", value: 15, color: "#10b981" },
-  { name: "Other", value: 5, color: "#f59e0b" }
-];
-
-const performanceData = [
-  { name: "Conversion Rate", value: 68, target: 75, color: "#8b5cf6" },
-  { name: "Bounce Rate", value: 32, target: 25, color: "#06b6d4" },
-  { name: "User Retention", value: 84, target: 80, color: "#10b981" },
-  { name: "Goal Completion", value: 76, target: 85, color: "#f59e0b" }
-];
-
-const hourlyData = [
-  { hour: "00", users: 120 }, { hour: "01", users: 95 }, { hour: "02", users: 80 },
-  { hour: "03", users: 75 }, { hour: "04", users: 85 }, { hour: "05", users: 110 },
-  { hour: "06", users: 180 }, { hour: "07", users: 280 }, { hour: "08", users: 420 },
-  { hour: "09", users: 520 }, { hour: "10", users: 580 }, { hour: "11", users: 650 },
-  { hour: "12", users: 720 }, { hour: "13", users: 680 }, { hour: "14", users: 620 },
-  { hour: "15", users: 580 }, { hour: "16", users: 540 }, { hour: "17", users: 480 },
-  { hour: "18", users: 420 }, { hour: "19", users: 380 }, { hour: "20", users: 320 },
-  { hour: "21", users: 280 }, { hour: "22", users: 220 }, { hour: "23", users: 160 }
-];
-
-const topProducts = [
-  { product: "iPhone 14 Pro", sales: 1234, revenue: "$123,400", growth: "+12%", trend: "up" },
-  { product: "MacBook Air", sales: 867, revenue: "$86,700", growth: "+8%", trend: "up" },
-  { product: "iPad Pro", sales: 543, revenue: "$54,300", growth: "+15%", trend: "up" },
-  { product: "AirPods Pro", sales: 2156, revenue: "$43,120", growth: "+22%", trend: "up" },
-  { product: "Apple Watch", sales: 876, revenue: "$35,040", growth: "-5%", trend: "down" },
-  { product: "Mac Studio", sales: 234, revenue: "$46,800", growth: "+18%", trend: "up" }
-];
-
-const CustomTooltip = ({ active, payload, label }:any) => {
+const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-background/95 backdrop-blur-sm border border-border/50 rounded-lg p-3 shadow-lg">
         <p className="text-sm font-medium">{label}</p>
-        {payload.map((entry:any, index:number) => (
+        {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm" style={{ color: entry.color }}>
             {entry.name}: {typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value}
           </p>
@@ -97,14 +40,29 @@ const CustomTooltip = ({ active, payload, label }:any) => {
 };
 
 export default function Page() {
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: statisticsData, isLoading, error } = useStatistics();
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, []);
+  if (error) {
+    return (
+      <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <TrendingUp className="h-12 w-12 mx-auto text-red-500 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Veri Yüklenemedi</h3>
+            <p className="text-muted-foreground">İstatistik verileri yüklenirken bir hata oluştu.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const keyMetrics = statisticsData?.keyMetrics || [];
+  const revenueData = statisticsData?.revenueData || [];
+  const categoryData = statisticsData?.categoryData || [];
+  const trafficData = statisticsData?.trafficData || [];
+  const performanceData = statisticsData?.performanceData || [];
+  const hourlyData = statisticsData?.hourlyData || [];
+  const topProducts = statisticsData?.topProducts || [];
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 bg-gradient-to-br from-background to-muted/20">
@@ -134,8 +92,8 @@ export default function Page() {
             </Card>
           ))
         ) : (
-          keyMetrics.map((metric, i) => {
-            const Icon = metric.icon;
+          keyMetrics.map((metric: any, i: number) => {
+            const Icon = iconMap[metric.icon as keyof typeof iconMap] || DollarSign;
             const TrendIcon = metric.trend === 'up' ? ArrowUpRight : ArrowDownRight;
             return (
               <Card key={i} className="border-border/50 bg-gradient-to-br from-card to-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300 group">
@@ -180,12 +138,12 @@ export default function Page() {
                 <ComposedChart data={revenueData}>
                   <defs>
                     <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.05}/>
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.05} />
                     </linearGradient>
                     <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.05}/>
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
@@ -193,20 +151,20 @@ export default function Page() {
                   <YAxis stroke="hsl(var(--muted-foreground))" />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
-                  <Area 
-                    type="monotone" 
-                    dataKey="revenue" 
-                    stroke="#8b5cf6" 
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#8b5cf6"
                     strokeWidth={3}
-                    fill="url(#revenueGradient)" 
+                    fill="url(#revenueGradient)"
                     name="Revenue ($)"
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="profit" 
-                    stroke="#06b6d4" 
+                  <Area
+                    type="monotone"
+                    dataKey="profit"
+                    stroke="#06b6d4"
                     strokeWidth={3}
-                    fill="url(#profitGradient)" 
+                    fill="url(#profitGradient)"
                     name="Profit ($)"
                   />
                   <Bar dataKey="users" fill="#10b981" name="Users" opacity={0.7} />
@@ -228,17 +186,17 @@ export default function Page() {
             ) : (
               <ResponsiveContainer width="100%" height={320}>
                 <RadialBarChart cx="50%" cy="50%" innerRadius="30%" outerRadius="90%" data={performanceData}>
-                  <RadialBar 
+                  <RadialBar
                     // Removed unsupported minAngle property
-                    label={{ position: 'insideStart', fill: '#fff', fontSize: 12 }} 
-                    background 
+                    label={{ position: 'insideStart', fill: '#fff', fontSize: 12 }}
+                    background
                     dataKey="value"
                     fill="#8b5cf6"
                   />
-                  <Legend 
-                    iconSize={10} 
-                    wrapperStyle={{ fontSize: '12px' }} 
-                    verticalAlign="bottom" 
+                  <Legend
+                    iconSize={10}
+                    wrapperStyle={{ fontSize: '12px' }}
+                    verticalAlign="bottom"
                     align="center"
                   />
                   <Tooltip content={<CustomTooltip />} />
@@ -298,8 +256,8 @@ export default function Page() {
                 <AreaChart data={hourlyData}>
                   <defs>
                     <linearGradient id="trafficGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
@@ -352,8 +310,8 @@ export default function Page() {
                   {trafficData.map((item, i) => (
                     <div key={i} className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <div 
-                          className="h-3 w-3 rounded-full" 
+                        <div
+                          className="h-3 w-3 rounded-full"
                           style={{ backgroundColor: item.color }}
                         />
                         <span className="text-sm font-medium">{item.name}</span>

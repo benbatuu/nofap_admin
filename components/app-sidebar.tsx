@@ -264,7 +264,7 @@ export function AppSidebar({ onApplicationChange, ...props }: AppSidebarProps) {
           onVersionChange={handleApplicationChange}
         />
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="overflow-y-auto">
         {/* Seçili uygulamaya göre menüyü göster */}
         {currentMenu.map((item) => (
           <SidebarGroup key={item.title}>
