@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getRecentActivities } from '@/lib/db'
+import { DashboardService } from '@/lib/services'
 
 export async function GET() {
     try {
-        const activities = await getRecentActivities()
+        const activities = await DashboardService.getRecentActivities()
 
         return NextResponse.json({
             success: true,

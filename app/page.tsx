@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui/badge"
 import { Users, TrendingUp, AlertTriangle, DollarSign, Target, Shield, Bell } from "lucide-react"
 import { useDashboardStats, useRecentActivities, useSystemStatus, useMonthlyStats } from "@/hooks/use-api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRouter } from "next/navigation"
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading, error: statsError } = useDashboardStats()
   const { data: activities, isLoading: activitiesLoading } = useRecentActivities()
   const { data: systemStatus, isLoading: systemLoading } = useSystemStatus()
   const { data: monthlyStats, isLoading: monthlyLoading } = useMonthlyStats()
+  const router = useRouter()
 
   const isLoading = statsLoading
   const error = statsError
@@ -186,25 +188,37 @@ export default function Dashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
+            <div 
+              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+              onClick={() => router.push('/notifications/send')}
+            >
               <div className="flex items-center space-x-3">
                 <Bell className="h-4 w-4" />
                 <span className="text-sm">Toplu Bildirim Gönder</span>
               </div>
             </div>
-            <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
+            <div 
+              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+              onClick={() => router.push('/users')}
+            >
               <div className="flex items-center space-x-3">
                 <Users className="h-4 w-4" />
                 <span className="text-sm">Kullanıcı Yönetimi</span>
               </div>
             </div>
-            <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
+            <div 
+              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+              onClick={() => router.push('/security/logs')}
+            >
               <div className="flex items-center space-x-3">
                 <Shield className="h-4 w-4" />
                 <span className="text-sm">Güvenlik Logları</span>
               </div>
             </div>
-            <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
+            <div 
+              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+              onClick={() => router.push('/dashboard/statistics')}
+            >
               <div className="flex items-center space-x-3">
                 <TrendingUp className="h-4 w-4" />
                 <span className="text-sm">Analiz Raporları</span>

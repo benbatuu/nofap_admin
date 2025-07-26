@@ -79,6 +79,7 @@ export function useDashboardStats() {
         queryKey: ['dashboard', 'stats'],
         queryFn: () => dashboardApi.getStats(),
         refetchInterval: 30000, // Refetch every 30 seconds
+        staleTime: 15000, // Consider data fresh for 15 seconds
     })
 }
 
@@ -161,6 +162,8 @@ export function useRoles(params?: { search?: string }) {
         queryKey: ['roles', params],
         queryFn: () => rolesApi.getRoles(params),
         refetchInterval: 60000, // Refetch every minute
+        staleTime: 30000, // Consider data fresh for 30 seconds
+        initialData: [], // Provide initial empty array to prevent hydration issues
     })
 }
 
@@ -213,6 +216,8 @@ export function usePermissions(params?: { search?: string }) {
         queryKey: ['permissions', params],
         queryFn: () => permissionsApi.getPermissions(params),
         refetchInterval: 60000, // Refetch every minute
+        staleTime: 30000, // Consider data fresh for 30 seconds
+        initialData: [], // Provide initial empty array to prevent hydration issues
     })
 }
 
@@ -297,6 +302,58 @@ export function useBulkUpdateUserNotifications() {
             userNotificationsApi.bulkUpdateUserNotifications(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['userNotifications'] })
+        },
+    })
+}
+
+// Blocked Users hooks
+export function useBlockedUsers(params?: { page?: number; limit?: number; search?: string }) {
+    return useQuery<BlockedUsersResponse>({
+        queryKey: ['blockedUsers', params],
+        queryFn: () => blockedUsersApi.getBlockedUsers(params),
+        refetchOnWindowFocus: true, // Pencere odaklandığında yenile
+    })
+}
+
+export function useBlockedUser(id: string) {
+    return useQuery<BlockedUser>({
+        queryKey: ['blockedUsers', id],
+        queryFn: () => blockedUsersApi.getBlockedUserById(id),
+        enabled: !!id,
+    })
+}
+
+export function useCreateBlockedUser() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: (data: CreateBlockedUserData) => blockedUsersApi.createBlockedUser(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['blockedUsers'] })
+        },
+    })
+}
+
+export function useUpdateBlockedUser() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: UpdateBlockedUserData }) =>
+            blockedUsersApi.updateBlockedUser(id, data),
+        onSuccess: (data, variables) => {
+            // Sadece burada invalidate işlemi yap, refetch yapma
+            queryClient.invalidateQueries({ queryKey: ['blockedUsers'] })
+        },
+    })
+}
+
+export function useDeleteBlockedUser() {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: (id: string) => blockedUsersApi.deleteBlockedUser(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['blockedUsers'] })
         },
     })
 }

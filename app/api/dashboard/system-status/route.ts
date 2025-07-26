@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
-import { getSystemStatus } from '@/lib/db'
+import { DashboardService } from '@/lib/services'
 
 export async function GET() {
     try {
-        const status = await getSystemStatus()
+        const systemStatus = await DashboardService.getSystemStatus()
 
         return NextResponse.json({
             success: true,
-            data: status
+            data: systemStatus
         })
     } catch (error) {
         console.error('System Status API Error:', error)

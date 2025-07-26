@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
-import { getMonthlyStats } from '@/lib/db'
+import { DashboardService } from '@/lib/services'
 
 export async function GET() {
     try {
-        const stats = await getMonthlyStats()
+        const monthlyStats = await DashboardService.getMonthlyStats()
 
         return NextResponse.json({
             success: true,
-            data: stats
+            data: monthlyStats
         })
     } catch (error) {
         console.error('Monthly Stats API Error:', error)

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { updateRole, deleteRole, getRoleById } from '@/lib/db'
+import { RoleService } from '@/lib/services'
 
 export async function GET(
     request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {
-        const role = await getRoleById(params.id)
+        const role = await RoleService.getRoleById(params.id)
 
         if (!role) {
             return NextResponse.json(
@@ -36,7 +36,7 @@ export async function PUT(
         const body = await request.json()
         const { name, description, permissions } = body
 
-        const role = await updateRole(params.id, { name, description, permissions })
+        const role = await RoleService.updateRole(params.id, { name, description, permissions })
 
         if (!role) {
             return NextResponse.json(
@@ -63,7 +63,8 @@ export async function DELETE(
     { params }: { params: { id: string } }
 ) {
     try {
-        const success = await deleteRole(params.id)
+        await RoleService.deleteRole(params.id)
+        const success = true
 
         if (!success) {
             return NextResponse.json(

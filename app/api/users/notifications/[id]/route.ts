@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getUserNotificationById, updateUserNotifications } from '@/lib/db'
+import { UserService } from '@/lib/services'
 
 export async function GET(
     request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {
-        const user = await getUserNotificationById(params.id)
+        const user = await UserService.getUserById(params.id)
 
         if (!user) {
             return NextResponse.json(
@@ -36,7 +36,7 @@ export async function PUT(
         const body = await request.json()
         const { globalEnabled, notifications } = body
 
-        const user = await updateUserNotifications(params.id, { globalEnabled, notifications })
+        const user = await UserService.updateUser(params.id, { globalEnabled, notifications })
 
         if (!user) {
             return NextResponse.json(

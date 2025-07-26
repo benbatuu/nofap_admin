@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getDashboardStats } from '@/lib/db'
+import { DashboardService } from '@/lib/services'
 
 export async function GET() {
     try {
-        const stats = await getDashboardStats()
+        const stats = await DashboardService.getDashboardStats()
 
         return NextResponse.json({
             success: true,

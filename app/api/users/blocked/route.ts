@@ -1,38 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-// Mock data - replace with actual database calls
-let blockedUsers = [
-    {
-        id: '1',
-        username: 'john_doe',
-        email: 'john@example.com',
-        blockedDate: '2024-01-15',
-        reason: 'Spam gönderimi',
-        blockedBy: 'admin',
-        status: 'active' as const,
-        blockedUntil: null
-    },
-    {
-        id: '2',
-        username: 'jane_smith',
-        email: 'jane@example.com',
-        blockedDate: '2024-01-20',
-        reason: 'Uygunsuz içerik paylaşımı',
-        blockedBy: 'moderator',
-        status: 'temporary' as const,
-        blockedUntil: '2024-08-01'
-    },
-    {
-        id: '3',
-        username: 'spam_user',
-        email: 'spam@example.com',
-        blockedDate: '2024-01-10',
-        reason: 'Toplu spam aktivitesi',
-        blockedBy: 'system',
-        status: 'permanent' as const,
-        blockedUntil: null
-    }
-]
+import { PrismaClient } from '@/lib/generated/prisma';
+const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
     try {
@@ -41,42 +9,50 @@ export async function GET(request: NextRequest) {
         const limit = parseInt(searchParams.get('limit') || '10')
         const search = searchParams.get('search') || ''
 
-        let filteredUsers = blockedUsers
+        // Prisma ile filtreli ve paginated sorgu
+        const where = search
+            ? {
+                OR: [
+                    { username: { contains: search } },
+                    { email: { contains: search } },
+                    { reason: { contains: search } },
+                ],
+            }
+            : undefined;
 
-        // Apply search filter
-        if (search) {
-            filteredUsers = blockedUsers.filter(user =>
-                user.username.toLowerCase().includes(search.toLowerCase()) ||
-                user.email.toLowerCase().includes(search.toLowerCase()) ||
-                user.reason.toLowerCase().includes(search.toLowerCase())
-            )
-        }
-
-        // Apply pagination
-        const startIndex = (page - 1) * limit
-        const endIndex = startIndex + limit
-        const paginatedUsers = filteredUsers.slice(startIndex, endIndex)
+        const [users, total, active, temporary, permanent] = await Promise.all([
+            prisma.blockedUser.findMany({
+                where,
+                skip: (page - 1) * limit,
+                take: limit,
+                orderBy: { blockedDate: 'desc' },
+            }),
+            prisma.blockedUser.count({ where }),
+            prisma.blockedUser.count({ where: { ...(where || {}), status: 'active' } }),
+            prisma.blockedUser.count({ where: { ...(where || {}), status: 'temporary' } }),
+            prisma.blockedUser.count({ where: { ...(where || {}), status: 'permanent' } }),
+        ]);
 
         const result = {
-            users: paginatedUsers,
+            users,
             pagination: {
-                total: filteredUsers.length,
+                total,
                 page,
                 limit,
-                totalPages: Math.ceil(filteredUsers.length / limit)
+                totalPages: Math.ceil(total / limit),
             },
             stats: {
-                total: blockedUsers.length,
-                active: blockedUsers.filter(u => u.status === 'active').length,
-                temporary: blockedUsers.filter(u => u.status === 'temporary').length,
-                permanent: blockedUsers.filter(u => u.status === 'permanent').length
-            }
-        }
+                total,
+                active,
+                temporary,
+                permanent,
+            },
+        };
 
         return NextResponse.json({
             success: true,
-            data: result
-        })
+            data: result,
+        });
     } catch (error) {
         console.error('Blocked users API error:', error)
         return NextResponse.json(
@@ -98,23 +74,22 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const newUser = {
-            id: Date.now().toString(),
-            username,
-            email,
-            reason,
-            status,
-            blockedUntil: status === 'temporary' ? blockedUntil : null,
-            blockedDate: new Date().toISOString().split('T')[0],
-            blockedBy: 'admin' // In real app, get from auth context
-        }
-
-        blockedUsers.push(newUser)
+        const newUser = await prisma.blockedUser.create({
+            data: {
+                username,
+                email,
+                reason,
+                status,
+                blockedUntil: status === 'temporary' ? (blockedUntil ? new Date(blockedUntil) : null) : null,
+                blockedDate: new Date(),
+                blockedBy: 'admin', // In real app, get from auth context
+            },
+        });
 
         return NextResponse.json({
             success: true,
-            data: newUser
-        })
+            data: newUser,
+        });
     } catch (error) {
         console.error('Create blocked user error:', error)
         return NextResponse.json(

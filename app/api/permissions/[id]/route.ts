@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { updatePermission, deletePermission, getPermissionById } from '@/lib/db'
+import { PermissionService } from '@/lib/services'
 
 export async function GET(
     request: NextRequest,
     { params }: { params: { id: string } }
 ) {
     try {
-        const permission = await getPermissionById(params.id)
+        const permission = await PermissionService.getPermissionById(params.id)
 
         if (!permission) {
             return NextResponse.json(
@@ -36,7 +36,7 @@ export async function PUT(
         const body = await request.json()
         const { name, description, category } = body
 
-        const permission = await updatePermission(params.id, { name, description, category })
+        const permission = await PermissionService.updatePermission(params.id, { name, description, category })
 
         if (!permission) {
             return NextResponse.json(
@@ -63,7 +63,8 @@ export async function DELETE(
     { params }: { params: { id: string } }
 ) {
     try {
-        const success = await deletePermission(params.id)
+        await PermissionService.deletePermission(params.id)
+        const success = true
 
         if (!success) {
             return NextResponse.json(

@@ -1,0 +1,498 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model BlockedUser {
+  id           String      @id @default(cuid())
+  username     String
+  email        String
+  blockedDate  DateTime
+  reason       String
+  blockedBy    String
+  status       BlockStatus
+  blockedUntil DateTime?
+
+  @@index([email])
+  @@index([status])
+  @@index([blockedDate])
+  @@index([blockedUntil])
+}
+
+enum BlockStatus {
+  active
+  temporary
+  permanent
+}
+
+model Message {
+  id        String        @id @default(cuid())
+  sender    String
+  title     String
+  type      MessageType
+  message   String
+  status    MessageStatus
+  createdAt DateTime      @default(now())
+  user      User?         @relation(fields: [userId], references: [id])
+  userId    String?
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+enum MessageType {
+  feedback
+  support
+  bug
+  system
+}
+
+enum MessageStatus {
+  pending
+  read
+  replied
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  title        String
+  description  String
+  status       TaskStatus
+  aiConfidence Int
+  userId       String
+  userName     String
+  slipId       String?
+  createdDate  DateTime   @default(now())
+  dueDate      DateTime
+  category     String
+  difficulty   String
+  user         User       @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([userId])
+  @@index([category])
+  @@index([difficulty])
+  @@index([createdDate])
+  @@index([dueDate])
+}
+
+enum TaskStatus {
+  active
+  completed
+  expired
+}
+
+model BlockedIP {
+  id         String      @id @default(cuid())
+  ip         String
+  reason     String
+  blockedAt  DateTime
+  blockedBy  String
+  attempts   Int
+  location   String
+  status     BlockStatus
+
+  @@index([ip])
+  @@index([status])
+  @@index([blockedAt])
+  @@index([attempts])
+}
+
+model User {
+  id                String            @id @default(cuid())
+  name              String
+  email             String            @unique
+  avatar            String?
+  globalEnabled     Boolean
+  notifications     Json
+  lastActivity      DateTime
+  createdAt         DateTime          @default(now())
+  streak            Int
+  isPremium         Boolean
+  status            UserStatus
+  messages          Message[]
+  tasks             Task[]
+  activities        Activity[]
+  billingLogs       BillingLog[]
+  devices           Device[]
+  streaks           Streak[]
+  relapses          Relapse[]
+  notificationLogs  NotificationLog[]
+
+  @@index([email])
+  @@index([status])
+  @@index([isPremium])
+  @@index([lastActivity])
+  @@index([createdAt])
+  @@index([streak])
+}
+
+enum UserStatus {
+  active
+  banned
+  inactive
+}
+
+model Notification {
+  id               String               @id @default(cuid())
+  title            String
+  message          String
+  type             NotificationType
+  targetGroup      String
+  scheduledAt      DateTime
+  status           NotificationStatus
+  frequency        NotificationFrequency
+  createdAt        DateTime             @default(now())
+  notificationLogs NotificationLog[]
+
+  @@index([type])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  motivation
+  dailyReminder
+  marketing
+  system
+}
+
+enum NotificationStatus {
+  active
+  paused
+  completed
+  cancelled
+}
+
+enum NotificationFrequency {
+  once
+  daily
+  weekly
+  monthly
+}
+
+model BillingLog {
+  id            String        @id @default(cuid())
+  userId        String
+  userName      String
+  amount        Float
+  currency      String
+  status        BillingStatus
+  paymentMethod String
+  description   String
+  createdAt     DateTime      @default(now())
+  user          User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([amount])
+}
+
+enum BillingStatus {
+  success
+  pending
+  failed
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  price       Float
+  currency    String
+  type        ProductType
+  duration    String?
+  subscribers Int
+  isActive    Boolean
+  createdAt   DateTime    @default(now())
+
+  @@index([type])
+  @@index([isActive])
+  @@index([price])
+  @@index([createdAt])
+}
+
+enum ProductType {
+  subscription
+  one_time
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  permissions String[]
+  userCount   Int
+  createdAt   DateTime @default(now())
+
+  @@index([name])
+  @@index([createdAt])
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  category    String
+  rolesCount  Int
+
+  @@index([name])
+  @@index([category])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  type      String
+  message   String
+  details   String
+  timestamp DateTime @default(now())
+  color     String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([type])
+}
+
+// New models for ads management
+model Ad {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  imageUrl    String?
+  targetUrl   String
+  type        AdType
+  status      AdStatus
+  placement   String
+  targeting   Json      // Store targeting criteria as JSON
+  budget      Float?
+  spent       Float     @default(0)
+  impressions Int       @default(0)
+  clicks      Int       @default(0)
+  startDate   DateTime
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([startDate, endDate])
+}
+
+enum AdType {
+  banner
+  popup
+  native
+  video
+}
+
+enum AdStatus {
+  active
+  paused
+  completed
+  rejected
+}
+
+// Security logs model
+model SecurityLog {
+  id          String            @id @default(cuid())
+  eventType   SecurityEventType
+  description String
+  ipAddress   String
+  userAgent   String?
+  userId      String?
+  severity    SecuritySeverity
+  details     Json?
+  timestamp   DateTime          @default(now())
+  resolved    Boolean           @default(false)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+
+  @@index([eventType])
+  @@index([severity])
+  @@index([timestamp])
+  @@index([userId])
+  @@index([ipAddress])
+}
+
+enum SecurityEventType {
+  login_attempt
+  failed_login
+  suspicious_activity
+  data_breach_attempt
+  unauthorized_access
+  password_change
+  account_lockout
+  privilege_escalation
+}
+
+enum SecuritySeverity {
+  low
+  medium
+  high
+  critical
+}
+
+// Device tracking model
+model Device {
+  id           String    @id @default(cuid())
+  userId       String
+  deviceId     String    @unique
+  deviceName   String
+  deviceType   String
+  os           String
+  browser      String?
+  ipAddress    String
+  location     String?
+  lastSeen     DateTime  @default(now())
+  isActive     Boolean   @default(true)
+  isTrusted    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([deviceId])
+  @@index([lastSeen])
+  @@index([isActive])
+}
+
+// System settings model
+model SystemSetting {
+  id          String              @id @default(cuid())
+  key         String              @unique
+  value       String
+  type        SystemSettingType
+  category    String
+  description String
+  isPublic    Boolean             @default(false)
+  updatedBy   String
+  updatedAt   DateTime            @updatedAt
+  createdAt   DateTime            @default(now())
+
+  @@index([category])
+  @@index([key])
+}
+
+enum SystemSettingType {
+  string
+  number
+  boolean
+  json
+}
+
+// Audit log model for tracking admin actions
+model AuditLog {
+  id          String    @id @default(cuid())
+  action      String
+  resource    String
+  resourceId  String?
+  userId      String
+  userName    String
+  details     Json?
+  ipAddress   String
+  userAgent   String?
+  timestamp   DateTime  @default(now())
+
+  @@index([action])
+  @@index([resource])
+  @@index([userId])
+  @@index([timestamp])
+}
+
+// Streak tracking model
+model Streak {
+  id          String    @id @default(cuid())
+  userId      String
+  startDate   DateTime
+  endDate     DateTime?
+  currentDays Int       @default(0)
+  bestStreak  Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([currentDays])
+}
+
+// Relapse tracking model
+model Relapse {
+  id          String    @id @default(cuid())
+  userId      String
+  date        DateTime  @default(now())
+  trigger     String?
+  notes       String?
+  severity    Int       // 1-10 scale
+  recovery    String?
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([date])
+}
+
+// FAQ model
+model FAQ {
+  id          String    @id @default(cuid())
+  question    String
+  answer      String
+  category    String
+  order       Int       @default(0)
+  isPublished Boolean   @default(false)
+  views       Int       @default(0)
+  helpful     Int       @default(0)
+  notHelpful  Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([category])
+  @@index([isPublished])
+  @@index([order])
+}
+
+// Notification logs for tracking delivery
+model NotificationLog {
+  id             String                  @id @default(cuid())
+  notificationId String
+  userId         String?
+  type           NotificationType
+  title          String
+  message        String
+  status         NotificationLogStatus
+  sentAt         DateTime                @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  clickedAt      DateTime?
+  errorMessage   String?
+  notification   Notification            @relation(fields: [notificationId], references: [id])
+  user           User?                   @relation(fields: [userId], references: [id])
+
+  @@index([notificationId])
+  @@index([userId])
+  @@index([status])
+  @@index([sentAt])
+}
+
+enum NotificationLogStatus {
+  sent
+  delivered
+  read
+  clicked
+  failed
+}

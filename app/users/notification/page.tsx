@@ -46,9 +46,38 @@ export default function UserNotificationsPage() {
     const updateUserMutation = useUpdateUserNotification();
     const bulkUpdateMutation = useBulkUpdateUserNotifications();
 
+    // Default notification structure
+    const defaultNotifications = {
+        motivation: { push: false, email: false, sms: false },
+        dailyReminder: { push: false, email: false, sms: false },
+        marketing: { push: false, email: false, sms: false },
+        system: { push: true, email: true, sms: false }
+    };
+
+    // Normalize user data with proper notification structure
+    const normalizedUsers = useMemo(() => {
+        return allUsers.map(user => {
+            if (!user) return null;
+            
+            // Ensure notifications object exists and has proper structure
+            const notifications = user.notifications || {};
+            const normalizedNotifications = {
+                motivation: notifications.motivation || defaultNotifications.motivation,
+                dailyReminder: notifications.dailyReminder || defaultNotifications.dailyReminder,
+                marketing: notifications.marketing || defaultNotifications.marketing,
+                system: notifications.system || defaultNotifications.system
+            };
+
+            return {
+                ...user,
+                notifications: normalizedNotifications
+            };
+        }).filter(Boolean);
+    }, [allUsers]);
+
     // Filter users locally based on search and filters
     const filteredUsers = useMemo(() => {
-        return allUsers.filter(user => {
+        return normalizedUsers.filter(user => {
             if (!user) return false;
 
             const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -59,36 +88,36 @@ export default function UserNotificationsPage() {
                 (filterStatus === 'enabled' && user.globalEnabled) ||
                 (filterStatus === 'disabled' && !user.globalEnabled);
 
-            const matchesType = filterType === 'all' ||
-                (user.notifications &&
-                    user.notifications[filterType as keyof typeof user.notifications] &&
-                    Object.values(user.notifications[filterType as keyof typeof user.notifications] || {}).some(val => val));
+            const matchesType = filterType === 'all' || (() => {
+                if (!user.notifications) return false;
+                const notificationSettings = user.notifications[filterType as keyof typeof user.notifications] || defaultNotifications[filterType as keyof typeof defaultNotifications] || {};
+                return Object.values(notificationSettings).some(val => Boolean(val));
+            })();
 
             return matchesSearch && matchesStatus && matchesType;
         });
-    }, [allUsers, searchTerm, filterStatus, filterType]);
+    }, [normalizedUsers, searchTerm, filterStatus, filterType]);
 
     // Statistics
     const stats = useMemo(() => {
-        if (!allUsers || allUsers.length === 0) {
+        if (!normalizedUsers || normalizedUsers.length === 0) {
             return { totalUsers: 0, enabledUsers: 0, typeStats: {} };
         }
 
-        const totalUsers = allUsers.length;
-        const enabledUsers = allUsers.filter(u => u && u.globalEnabled).length;
+        const totalUsers = normalizedUsers.length;
+        const enabledUsers = normalizedUsers.filter(u => u && u.globalEnabled).length;
         const typeStats: Record<string, number> = {};
 
         Object.keys(notificationTypes).forEach(type => {
-            typeStats[type] = allUsers.filter(u =>
-                u &&
-                u.notifications &&
-                u.notifications[type as keyof typeof u.notifications] &&
-                Object.values(u.notifications[type as keyof typeof u.notifications]).some(val => val)
-            ).length;
+            typeStats[type] = normalizedUsers.filter(u => {
+                if (!u || !u.notifications) return false;
+                const notificationSettings = u.notifications[type as keyof typeof u.notifications] || defaultNotifications[type as keyof typeof defaultNotifications] || {};
+                return Object.values(notificationSettings).some(val => Boolean(val));
+            }).length;
         });
 
         return { totalUsers, enabledUsers, typeStats };
-    }, [allUsers]);
+    }, [normalizedUsers]);
 
     if (error) {
         return (
@@ -144,15 +173,15 @@ export default function UserNotificationsPage() {
 
     const exportToCSV = () => {
         const headers = ['ID', 'Ad', 'E-posta', 'Genel Durum', 'Motivasyon', 'Günlük Hatırlatma', 'Pazarlama', 'Sistem'];
-        const rows = allUsers.map(user => [
+        const rows = normalizedUsers.map(user => [
             user.id,
             user.name,
             user.email,
             user.globalEnabled ? 'Aktif' : 'Pasif',
-            Object.values(user.notifications.motivation).some(v => v) ? 'Açık' : 'Kapalı',
-            Object.values(user.notifications.dailyReminder).some(v => v) ? 'Açık' : 'Kapalı',
-            Object.values(user.notifications.marketing).some(v => v) ? 'Açık' : 'Kapalı',
-            Object.values(user.notifications.system).some(v => v) ? 'Açık' : 'Kapalı'
+            Object.values(user.notifications.motivation || {}).some(v => v) ? 'Açık' : 'Kapalı',
+            Object.values(user.notifications.dailyReminder || {}).some(v => v) ? 'Açık' : 'Kapalı',
+            Object.values(user.notifications.marketing || {}).some(v => v) ? 'Açık' : 'Kapalı',
+            Object.values(user.notifications.system || {}).some(v => v) ? 'Açık' : 'Kapalı'
         ]);
 
         const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
@@ -375,21 +404,24 @@ export default function UserNotificationsPage() {
                                                 </Badge>
                                             </div>
                                         </TableCell>
-                                        {Object.keys(notificationTypes).map((type) => (
-                                            <TableCell key={type}>
-                                                <div className="flex gap-1">
-                                                    {Object.entries(user.notifications[type as keyof typeof user.notifications]).map(([channel, enabled]) => (
-                                                        <div
-                                                            key={channel}
-                                                            className={`p-1 rounded ${enabled ? 'text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-950/20' : 'text-gray-400 bg-gray-50 dark:text-gray-500 dark:bg-gray-800/50'}`}
-                                                            title={`${channel}: ${enabled ? 'Açık' : 'Kapalı'}`}
-                                                        >
-                                                            {channelIcons[channel as keyof typeof channelIcons]}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </TableCell>
-                                        ))}
+                                        {Object.keys(notificationTypes).map((type) => {
+                                            const notificationSettings = user.notifications?.[type as keyof typeof user.notifications] || defaultNotifications[type as keyof typeof defaultNotifications] || {};
+                                            return (
+                                                <TableCell key={type}>
+                                                    <div className="flex gap-1">
+                                                        {Object.entries(notificationSettings).map(([channel, enabled]) => (
+                                                            <div
+                                                                key={channel}
+                                                                className={`p-1 rounded ${enabled ? 'text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-950/20' : 'text-gray-400 bg-gray-50 dark:text-gray-500 dark:bg-gray-800/50'}`}
+                                                                title={`${channel}: ${enabled ? 'Açık' : 'Kapalı'}`}
+                                                            >
+                                                                {channelIcons[channel as keyof typeof channelIcons]}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </TableCell>
+                                            );
+                                        })}
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -400,7 +432,17 @@ export default function UserNotificationsPage() {
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem
                                                         onClick={() => {
-                                                            setSelectedUser(user);
+                                                            // Ensure selected user has proper notification structure
+                                                            const userWithNotifications = {
+                                                                ...user,
+                                                                notifications: {
+                                                                    motivation: user.notifications.motivation || defaultNotifications.motivation,
+                                                                    dailyReminder: user.notifications.dailyReminder || defaultNotifications.dailyReminder,
+                                                                    marketing: user.notifications.marketing || defaultNotifications.marketing,
+                                                                    system: user.notifications.system || defaultNotifications.system
+                                                                }
+                                                            };
+                                                            setSelectedUser(userWithNotifications);
                                                             setIsEditDialogOpen(true);
                                                         }}
                                                     >
@@ -467,32 +509,36 @@ export default function UserNotificationsPage() {
                                                 </CardTitle>
                                             </CardHeader>
                                             <CardContent className="space-y-3">
-                                                {Object.entries(selectedUser.notifications[type as keyof typeof selectedUser.notifications]).map(([channel, enabled]) => (
-                                                    <div key={channel} className="flex items-center space-x-2">
-                                                        <Switch
-                                                            id={`${type}-${channel}`}
-                                                            checked={enabled}
-                                                            onCheckedChange={(checked) => {
-                                                                const updatedNotifications = {
-                                                                    ...selectedUser.notifications,
-                                                                    [type]: {
-                                                                        ...selectedUser.notifications[type as keyof typeof selectedUser.notifications],
-                                                                        [channel]: checked
-                                                                    }
-                                                                };
-                                                                const updatedUser = { ...selectedUser, notifications: updatedNotifications };
-                                                                setSelectedUser(updatedUser);
-                                                                handleUserUpdate(selectedUser.id, { notifications: updatedNotifications });
-                                                            }}
-                                                            disabled={updateUserMutation.isPending}
-                                                        />
+                                                {(() => {
+                                                    const notificationSettings = selectedUser.notifications?.[type as keyof typeof selectedUser.notifications] || defaultNotifications[type as keyof typeof defaultNotifications] || {};
+                                                    return Object.entries(notificationSettings).map(([channel, enabled]) => (
+                                                        <div key={channel} className="flex items-center space-x-2">
+                                                            <Switch
+                                                                id={`${type}-${channel}`}
+                                                                checked={Boolean(enabled)}
+                                                                onCheckedChange={(checked) => {
+                                                                    const currentTypeSettings = selectedUser.notifications?.[type as keyof typeof selectedUser.notifications] || defaultNotifications[type as keyof typeof defaultNotifications] || {};
+                                                                    const updatedNotifications = {
+                                                                        ...selectedUser.notifications,
+                                                                        [type]: {
+                                                                            ...currentTypeSettings,
+                                                                            [channel]: checked
+                                                                        }
+                                                                    };
+                                                                    const updatedUser = { ...selectedUser, notifications: updatedNotifications };
+                                                                    setSelectedUser(updatedUser);
+                                                                    handleUserUpdate(selectedUser.id, { notifications: updatedNotifications });
+                                                                }}
+                                                                disabled={updateUserMutation.isPending}
+                                                            />
                                                         <Label htmlFor={`${type}-${channel}`} className="flex items-center gap-2">
                                                             {channelIcons[channel as keyof typeof channelIcons]}
                                                             {channel === 'push' ? 'Push Bildirim' :
                                                                 channel === 'email' ? 'E-posta' : 'SMS'}
                                                         </Label>
                                                     </div>
-                                                ))}
+                                                ))
+                                            })()}
                                             </CardContent>
                                         </Card>
                                     ))}
@@ -517,7 +563,7 @@ export default function UserNotificationsPage() {
                                                         <div key={type} className="flex items-center justify-between">
                                                             <span className="text-sm">{typeData.icon} {typeData.label}</span>
                                                             <Switch
-                                                                checked={selectedUser.notifications[type as keyof typeof selectedUser.notifications][channel as keyof typeof selectedUser.notifications.motivation]}
+                                                                checked={(selectedUser.notifications[type as keyof typeof selectedUser.notifications] || {})[channel as keyof typeof selectedUser.notifications.motivation] || false}
                                                                 onCheckedChange={(checked) => {
                                                                     const updatedNotifications = {
                                                                         ...selectedUser.notifications,
