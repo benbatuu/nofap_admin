@@ -9,6 +9,9 @@ export interface CreateMessageData {
   userId?: string
   tags?: string[]
   priority?: 'low' | 'medium' | 'high' | 'urgent'
+  category?: string
+  scheduledAt?: Date
+  isScheduled?: boolean
 }
 
 export interface UpdateMessageData {
@@ -18,6 +21,11 @@ export interface UpdateMessageData {
   type?: MessageType
   tags?: string[]
   priority?: 'low' | 'medium' | 'high' | 'urgent'
+  category?: string
+  scheduledAt?: Date
+  isScheduled?: boolean
+  deliveredAt?: Date
+  readAt?: Date
 }
 
 export interface MessageReplyData {
@@ -34,6 +42,12 @@ export interface MessageFilters {
   status?: MessageStatus
   userId?: string
   search?: string
+  category?: string
+  tags?: string[]
+  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  isScheduled?: boolean
+  dateFrom?: Date
+  dateTo?: Date
 }
 
 export class MessageService {
@@ -631,6 +645,302 @@ export class MessageService {
     return csvContent
   }
 
+  // Message categorization and tagging enhancements
+  static async getMessageCategories() {
+    const categories = await prisma.message.findMany({
+      select: { type: true },
+      distinct: ['type']
+    })
+
+    // Get custom categories if they exist in the message content
+    const customCategories = await prisma.$queryRaw`
+      SELECT DISTINCT 
+        REGEXP_REPLACE(message, '.*#category:([^\\s]+).*', '\\1') as category
+      FROM "Message" 
+      WHERE message ~ '#category:[^\\s]+'
+    ` as any[]
+
+    const allCategories = [
+      ...categories.map(c => ({ name: c.type, count: 0, type: 'system' })),
+      ...customCategories.map(c => ({ name: c.category, count: 0, type: 'custom' }))
+    ]
+
+    // Get counts for each category
+    for (const category of allCategories) {
+      const count = await prisma.message.count({
+        where: category.type === 'system' 
+          ? { type: category.name as MessageType }
+          : { message: { contains: `#category:${category.name}` } }
+      })
+      category.count = count
+    }
+
+    return allCategories
+  }
+
+  static async getMessagesByCategory(category: string, limit = 10) {
+    // Check if it's a system category (MessageType) or custom category
+    const isSystemCategory = ['feedback', 'support', 'bug', 'system'].includes(category)
+    
+    return prisma.message.findMany({
+      where: isSystemCategory 
+        ? { type: category as MessageType }
+        : { message: { contains: `#category:${category}` } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    })
+  }
+
+  // Enhanced tagging system
+  static async addTagsToMessage(messageId: string, tags: string[]) {
+    const message = await this.getMessageById(messageId)
+    if (!message) throw new Error('Message not found')
+
+    // Add tags to message content with proper formatting
+    const tagString = tags.map(tag => `#${tag}`).join(' ')
+    const updatedMessage = message.message + '\n\nTags: ' + tagString
+
+    return this.updateMessage(messageId, { 
+      message: updatedMessage
+    })
+  }
+
+  static async removeTagsFromMessage(messageId: string, tags: string[]) {
+    const message = await this.getMessageById(messageId)
+    if (!message) throw new Error('Message not found')
+
+    let updatedMessage = message.message
+    tags.forEach(tag => {
+      updatedMessage = updatedMessage.replace(new RegExp(`#${tag}\\s*`, 'g'), '')
+    })
+
+    return this.updateMessage(messageId, { 
+      message: updatedMessage.trim()
+    })
+  }
+
+  static async getMessageTags(messageId: string) {
+    const message = await this.getMessageById(messageId)
+    if (!message) return []
+
+    const tagMatches = message.message.match(/#\w+/g)
+    return tagMatches ? tagMatches.map(tag => tag.substring(1)) : []
+  }
+
+  // Message scheduling functionality
+  static async scheduleMessage(data: CreateMessageData & { scheduledAt: Date }) {
+    return prisma.message.create({
+      data: {
+        ...data,
+        status: 'pending',
+        isScheduled: true,
+        scheduledAt: data.scheduledAt
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    })
+  }
+
+  static async getScheduledMessages(limit = 50) {
+    return prisma.message.findMany({
+      where: { 
+        isScheduled: true,
+        status: 'pending',
+        scheduledAt: { lte: new Date() }
+      },
+      orderBy: { scheduledAt: 'asc' },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    })
+  }
+
+  static async markMessageAsDelivered(messageId: string) {
+    return this.updateMessage(messageId, { 
+      deliveredAt: new Date(),
+      status: 'read'
+    })
+  }
+
+  static async getDeliveryStats(days = 30) {
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+
+    const [scheduled, delivered, pending] = await Promise.all([
+      prisma.message.count({
+        where: {
+          isScheduled: true,
+          createdAt: { gte: startDate }
+        }
+      }),
+      prisma.message.count({
+        where: {
+          deliveredAt: { not: null },
+          createdAt: { gte: startDate }
+        }
+      }),
+      prisma.message.count({
+        where: {
+          isScheduled: true,
+          status: 'pending',
+          scheduledAt: { lte: new Date() }
+        }
+      })
+    ])
+
+    return {
+      scheduled,
+      delivered,
+      pending,
+      deliveryRate: scheduled > 0 ? (delivered / scheduled) * 100 : 0
+    }
+  }
+
+  // Enhanced filtering with new fields
+  static async getMessages(filters: MessageFilters = {}) {
+    const { 
+      page = 1, 
+      limit = 10, 
+      type, 
+      status, 
+      userId, 
+      search, 
+      category,
+      tags,
+      priority,
+      isScheduled,
+      dateFrom,
+      dateTo
+    } = filters
+
+    const where: any = {}
+
+    if (type) where.type = type
+    if (status) where.status = status
+    if (userId) where.userId = userId
+    if (isScheduled !== undefined) where.isScheduled = isScheduled
+
+    if (dateFrom || dateTo) {
+      where.createdAt = {}
+      if (dateFrom) where.createdAt.gte = dateFrom
+      if (dateTo) where.createdAt.lte = dateTo
+    }
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { message: { contains: search, mode: 'insensitive' } },
+        { sender: { contains: search, mode: 'insensitive' } }
+      ]
+    }
+
+    if (category) {
+      const isSystemCategory = ['feedback', 'support', 'bug', 'system'].includes(category)
+      if (isSystemCategory) {
+        where.type = category as MessageType
+      } else {
+        where.message = { contains: `#category:${category}` }
+      }
+    }
+
+    if (tags && tags.length > 0) {
+      where.message = {
+        contains: tags.map(tag => `#${tag}`).join('|')
+      }
+    }
+
+    if (priority) {
+      // Map priority to type for now (this would need a proper priority field)
+      const priorityTypeMap = {
+        'urgent': 'bug',
+        'high': 'support',
+        'medium': 'feedback',
+        'low': 'system'
+      }
+      where.type = priorityTypeMap[priority] as MessageType
+    }
+
+    const [messages, total] = await Promise.all([
+      prisma.message.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatar: true
+            }
+          }
+        }
+      }),
+      prisma.message.count({ where })
+    ])
+
+    return {
+      messages,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    }
+  }
+
+  // Performance tracking
+  static async getMessagePerformanceMetrics(days = 30) {
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+
+    const metrics = await prisma.$queryRaw`
+      SELECT 
+        DATE("createdAt") as date,
+        COUNT(*) as total_messages,
+        COUNT(CASE WHEN status = 'read' THEN 1 END) as read_messages,
+        COUNT(CASE WHEN status = 'replied' THEN 1 END) as replied_messages,
+        COUNT(CASE WHEN "deliveredAt" IS NOT NULL THEN 1 END) as delivered_messages,
+        AVG(CASE WHEN "deliveredAt" IS NOT NULL AND "createdAt" IS NOT NULL 
+            THEN EXTRACT(EPOCH FROM ("deliveredAt" - "createdAt"))/3600 
+            END) as avg_delivery_time_hours
+      FROM "Message"
+      WHERE "createdAt" >= ${startDate}
+      GROUP BY DATE("createdAt")
+      ORDER BY date DESC
+    ` as any[]
+
+    return metrics
+  }
+
   // Validation
   static validateMessageData(data: CreateMessageData | UpdateMessageData) {
     const errors: string[] = []
@@ -662,6 +972,18 @@ export class MessageService {
           errors.push('Tag length must be less than 50 characters')
         }
       })
+    }
+
+    if ('scheduledAt' in data && data.scheduledAt) {
+      if (data.scheduledAt < new Date()) {
+        errors.push('Scheduled time must be in the future')
+      }
+    }
+
+    if ('category' in data && data.category) {
+      if (data.category.length > 50) {
+        errors.push('Category name must be less than 50 characters')
+      }
     }
 
     return errors

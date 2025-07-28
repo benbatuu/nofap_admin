@@ -4,49 +4,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
-import { Target, TrendingUp, Award, Calendar } from "lucide-react"
-
-const streakData = [
-  {
-    id: "1",
-    username: "streak_master",
-    currentStreak: 127,
-    longestStreak: 180,
-    startDate: "2023-08-15",
-    lastUpdate: "2024-01-25",
-    status: "active",
-    milestones: ["7 days", "30 days", "90 days"]
-  },
-  {
-    id: "2",
-    username: "clean_warrior",
-    currentStreak: 45,
-    longestStreak: 67,
-    startDate: "2023-12-10",
-    lastUpdate: "2024-01-25",
-    status: "active",
-    milestones: ["7 days", "30 days"]
-  },
-  {
-    id: "3",
-    username: "new_beginning",
-    currentStreak: 0,
-    longestStreak: 23,
-    startDate: "2024-01-25",
-    lastUpdate: "2024-01-25",
-    status: "reset",
-    milestones: ["7 days"]
-  }
-]
-
-const milestoneStats = [
-  { milestone: "7 gün", count: 8234, percentage: 18.2 },
-  { milestone: "30 gün", count: 3456, percentage: 7.6 },
-  { milestone: "90 gün", count: 1234, percentage: 2.7 },
-  { milestone: "365 gün", count: 234, percentage: 0.5 }
-]
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Target, TrendingUp, Award, Calendar, RefreshCw } from "lucide-react"
+import { useStreakAnalytics } from "@/hooks/use-api"
+import { useState } from "react"
 
 export default function StreaksPage() {
+  const [timeFilter, setTimeFilter] = useState<string>("all")
+  const [limit, setLimit] = useState<number>(10)
+
+  // API Hook
+  const { 
+    data: streakData, 
+    isLoading, 
+    isError, 
+    error,
+    refetch 
+  } = useStreakAnalytics({ 
+    timeFilter: timeFilter !== 'all' ? timeFilter : undefined, 
+    limit 
+  })
+
+  const handleRefresh = () => {
+    refetch()
+  }
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
@@ -56,7 +38,35 @@ export default function StreaksPage() {
             Kullanıcıların streak durumlarını ve başarılarını takip edin
           </p>
         </div>
+        <div className="flex items-center space-x-2">
+          <Select value={timeFilter} onValueChange={setTimeFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Zaman filtresi" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tümü</SelectItem>
+              <SelectItem value="today">Bugün</SelectItem>
+              <SelectItem value="week">Bu Hafta</SelectItem>
+              <SelectItem value="month">Bu Ay</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Yenile
+          </Button>
+        </div>
       </div>
+
+      {isError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error?.message || 'Veri yüklenirken hata oluştu'}
+        </div>
+      )}
 
       {/* Genel İstatistikler */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -66,8 +76,12 @@ export default function StreaksPage() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12,234</div>
-            <p className="text-xs text-muted-foreground">+5.2% bu hafta</p>
+            <div className="text-2xl font-bold">
+              {isLoading ? "-" : streakData?.activeStreaks?.toLocaleString() || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              +{streakData?.weeklyGrowth || 0} bu hafta
+            </p>
           </CardContent>
         </Card>
 
@@ -77,8 +91,10 @@ export default function StreaksPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23 gün</div>
-            <p className="text-xs text-muted-foreground">+2 gün artış</p>
+            <div className="text-2xl font-bold">
+              {isLoading ? "-" : `${streakData?.averageStreak || 0} gün`}
+            </div>
+            <p className="text-xs text-muted-foreground">Aktif streakler</p>
           </CardContent>
         </Card>
 
@@ -88,8 +104,10 @@ export default function StreaksPage() {
             <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">547 gün</div>
-            <p className="text-xs text-muted-foreground">streak_legend</p>
+            <div className="text-2xl font-bold">
+              {isLoading ? "-" : `${streakData?.longestStreak || 0} gün`}
+            </div>
+            <p className="text-xs text-muted-foreground">Tüm zamanlar</p>
           </CardContent>
         </Card>
 
@@ -99,8 +117,10 @@ export default function StreaksPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,456</div>
-            <p className="text-xs text-muted-foreground">-8% geçen aydan</p>
+            <div className="text-2xl font-bold">
+              {isLoading ? "-" : streakData?.monthlyResets?.toLocaleString() || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Sıfırlanan streakler</p>
           </CardContent>
         </Card>
       </div>
@@ -115,16 +135,26 @@ export default function StreaksPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {milestoneStats.map((stat, index) => (
-              <div key={index} className="flex items-center space-x-4">
-                <div className="w-20 text-sm font-medium">{stat.milestone}</div>
-                <div className="flex-1">
-                  <Progress value={stat.percentage * 5} className="h-2" />
-                </div>
-                <div className="w-16 text-sm text-muted-foreground">{stat.count}</div>
-                <div className="w-12 text-sm text-muted-foreground">{stat.percentage}%</div>
+            {isLoading ? (
+              <div className="text-center text-muted-foreground py-4">
+                Yükleniyor...
               </div>
-            ))}
+            ) : streakData?.milestoneStats && streakData.milestoneStats.length > 0 ? (
+              streakData.milestoneStats.map((stat, index) => (
+                <div key={index} className="flex items-center space-x-4">
+                  <div className="w-20 text-sm font-medium">{stat.milestone}</div>
+                  <div className="flex-1">
+                    <Progress value={Math.min(stat.percentage * 2, 100)} className="h-2" />
+                  </div>
+                  <div className="w-16 text-sm text-muted-foreground">{stat.count.toLocaleString()}</div>
+                  <div className="w-12 text-sm text-muted-foreground">{stat.percentage}%</div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground py-4">
+                Henüz milestone verisi bulunmuyor
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -134,7 +164,7 @@ export default function StreaksPage() {
         <CardHeader>
           <CardTitle>Aktif Streak Listesi</CardTitle>
           <CardDescription>
-            En yüksek streak`e sahip kullanıcılar
+            En yüksek streak&apos;e sahip kullanıcılar
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -151,43 +181,57 @@ export default function StreaksPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {streakData.map((streak) => (
-                <TableRow key={streak.id}>
-                  <TableCell className="font-medium">{streak.username}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Badge
-                        variant={streak.currentStreak > 90 ? "default" : "secondary"}
-                        className={streak.currentStreak > 90 ? "bg-green-500 dark:bg-green-600" : ""}
-                      >
-                        {streak.currentStreak} gün
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{streak.longestStreak} gün</Badge>
-                  </TableCell>
-                  <TableCell>{streak.startDate}</TableCell>
-                  <TableCell>{streak.lastUpdate}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={streak.status === "active" ? "default" : "destructive"}
-                      className={streak.status === "active" ? "bg-green-500 dark:bg-green-600" : ""}
-                    >
-                      {streak.status === "active" ? "Aktif" : "Reset"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {streak.milestones.map((milestone, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {milestone}
-                        </Badge>
-                      ))}
-                    </div>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Yükleniyor...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : streakData?.topStreaks && streakData.topStreaks.length > 0 ? (
+                streakData.topStreaks.map((streak) => (
+                  <TableRow key={streak.id}>
+                    <TableCell className="font-medium">{streak.username}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Badge
+                          variant={streak.currentStreak > 90 ? "default" : "secondary"}
+                          className={streak.currentStreak > 90 ? "bg-green-500 dark:bg-green-600" : ""}
+                        >
+                          {streak.currentStreak} gün
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{streak.longestStreak} gün</Badge>
+                    </TableCell>
+                    <TableCell>{streak.startDate}</TableCell>
+                    <TableCell>{streak.lastUpdate}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={streak.status === "active" ? "default" : "destructive"}
+                        className={streak.status === "active" ? "bg-green-500 dark:bg-green-600" : ""}
+                      >
+                        {streak.status === "active" ? "Aktif" : "Reset"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {streak.milestones.map((milestone, index) => (
+                          <Badge key={index} variant="outline" className="text-xs">
+                            {milestone}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Henüz streak verisi bulunmuyor
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

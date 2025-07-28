@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/ui/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { Toaster } from "sonner";
 import { cookies } from "next/headers";
 
 const geistSans = Geist({
@@ -58,6 +59,7 @@ export default async function RootLayout({
               </SidebarInset>
             </SidebarProvider>
           </ThemeProvider>
+          <Toaster />
         </QueryProvider>
       </body>
     </html>

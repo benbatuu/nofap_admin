@@ -7,80 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Bell, CheckCircle, XCircle, Clock, Users, TrendingUp, Search, Calendar, Eye } from "lucide-react"
-
-const notificationLogs = [
-  {
-    id: "1",
-    title: "Günlük Motivasyon",
-    content: "Bugün harika bir gün! Hedeflerine odaklan ve güçlü kal. 💪",
-    sentAt: "2024-01-25 09:00:00",
-    targetGroup: "Tüm Kullanıcılar",
-    totalSent: 45231,
-    delivered: 44892,
-    opened: 12456,
-    clicked: 3421,
-    status: "completed",
-    type: "scheduled",
-    campaign: "daily_motivation"
-  },
-  {
-    id: "2",
-    title: "Premium Hatırlatması",
-    content: "Premium özelliklerini keşfet! İlk ay %50 indirimli.",
-    sentAt: "2024-01-25 20:00:00",
-    targetGroup: "Ücretsiz Kullanıcılar",
-    totalSent: 42881,
-    delivered: 42234,
-    opened: 8934,
-    clicked: 1876,
-    status: "completed",
-    type: "manual",
-    campaign: "premium_promo"
-  },
-  {
-    id: "3",
-    title: "Streak Kutlaması",
-    content: "Tebrikler! 30 günlük streak'ini tamamladın! 🎉",
-    sentAt: "2024-01-25 15:30:00",
-    targetGroup: "30 Gün Streak",
-    totalSent: 1234,
-    delivered: 1198,
-    opened: 892,
-    clicked: 234,
-    status: "completed",
-    type: "trigger",
-    campaign: "milestone_celebration"
-  },
-  {
-    id: "4",
-    title: "Destek Mesajı",
-    content: "Zorlandığın anları hatırla - sen bundan daha güçlüsün.",
-    sentAt: "2024-01-25 21:00:00",
-    targetGroup: "Zorlanıyor (Streak < 7)",
-    totalSent: 5678,
-    delivered: 5456,
-    opened: 2134,
-    clicked: 567,
-    status: "completed",
-    type: "scheduled",
-    campaign: "support_message"
-  },
-  {
-    id: "5",
-    title: "Haftalık Özet",
-    content: "Bu hafta nasıl geçti? İstatistiklerini kontrol et!",
-    sentAt: "2024-01-25 18:00:00",
-    targetGroup: "Aktif Kullanıcılar",
-    totalSent: 38492,
-    delivered: 37823,
-    opened: 15234,
-    clicked: 4567,
-    status: "sending",
-    type: "scheduled",
-    campaign: "weekly_summary"
-  }
-]
+import { Bell, CheckCircle, XCircle, Clock, Users, TrendingUp, Search, Calendar, Eye, RefreshCw } from "lucide-react"
+import { useNotificationLogs, useNotificationLogAnalytics, useNotificationLogStats } from "@/hooks/use-api"
 
 export default function NotificationLogsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -88,15 +16,31 @@ export default function NotificationLogsPage() {
   const [typeFilter, setTypeFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
 
-  const filteredLogs = notificationLogs.filter(log => {
-    const matchesSearch = log.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.campaign.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || log.status === statusFilter
-    const matchesType = typeFilter === "all" || log.type === typeFilter
-
-    return matchesSearch && matchesStatus && matchesType
+  // API Hooks
+  const { 
+    data: logsData, 
+    isLoading: isLogsLoading,
+    refetch: refetchLogs 
+  } = useNotificationLogs({
+    page: 1,
+    limit: 50,
+    search: searchTerm || undefined,
+    status: statusFilter !== "all" ? statusFilter : undefined,
+    type: typeFilter !== "all" ? typeFilter : undefined
   })
+
+  const { 
+    data: analytics, 
+    isLoading: isAnalyticsLoading 
+  } = useNotificationLogAnalytics()
+
+  const { 
+    data: stats, 
+    isLoading: isStatsLoading 
+  } = useNotificationLogStats()
+
+  const notificationLogs = logsData?.data || []
+  const filteredLogs = notificationLogs
 
   const calculateOpenRate = (opened: number, delivered: number) => {
     return delivered > 0 ? ((opened / delivered) * 100).toFixed(1) : "0.0"
@@ -125,8 +69,17 @@ export default function NotificationLogsPage() {
             <Bell className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">133,516</div>
-            <p className="text-xs text-muted-foreground">5 kampanya</p>
+            {isStatsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats?.today?.sent?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground">{notificationLogs.length} kampanya</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -136,8 +89,19 @@ export default function NotificationLogsPage() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">98.7%</div>
-            <p className="text-xs text-muted-foreground">+0.3% artış</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{analytics?.deliveryRate?.toFixed(1) || 0}%</div>
+                <p className="text-xs text-muted-foreground">
+                  {analytics?.totalDelivered?.toLocaleString() || 0} / {analytics?.totalSent?.toLocaleString() || 0}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -147,8 +111,19 @@ export default function NotificationLogsPage() {
             <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">28.4%</div>
-            <p className="text-xs text-muted-foreground">+1.2% artış</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{analytics?.openRate?.toFixed(1) || 0}%</div>
+                <p className="text-xs text-muted-foreground">
+                  {analytics?.totalRead?.toLocaleString() || 0} açıldı
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -158,8 +133,19 @@ export default function NotificationLogsPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8.2%</div>
-            <p className="text-xs text-muted-foreground">+0.8% artış</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{analytics?.clickRate?.toFixed(1) || 0}%</div>
+                <p className="text-xs text-muted-foreground">
+                  {analytics?.totalClicked?.toLocaleString() || 0} tıklandı
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -173,42 +159,79 @@ export default function NotificationLogsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {notificationLogs
-              .filter(log => log.status === "completed")
-              .sort((a, b) => (b.opened / b.delivered) - (a.opened / a.delivered))
-              .slice(0, 3)
-              .map((log, index) => (
-                <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
+          {isAnalyticsLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="animate-pulse w-6 h-6 bg-muted rounded-full"></div>
+                    <div>
+                      <div className="animate-pulse h-4 bg-muted rounded w-32 mb-1"></div>
+                      <div className="animate-pulse h-3 bg-muted rounded w-24"></div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="animate-pulse h-4 bg-muted rounded w-20 mb-1"></div>
+                    <div className="animate-pulse h-3 bg-muted rounded w-16"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : analytics?.topPerformingCampaigns && analytics.topPerformingCampaigns.length > 0 ? (
+            <div className="space-y-4">
+              {analytics.topPerformingCampaigns.map((campaign: any, index: any) => (
+                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center space-x-3">
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${index === 0 ? "bg-yellow-500 dark:bg-yellow-600" : index === 1 ? "bg-gray-400 dark:bg-gray-500" : "bg-orange-500 dark:bg-orange-600"
                       }`}>
                       {index + 1}
                     </div>
                     <div>
-                      <div className="font-medium">{log.title}</div>
-                      <div className="text-sm text-muted-foreground">{log.targetGroup}</div>
+                      <div className="font-medium">{campaign.title}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {campaign.totalSent.toLocaleString()} gönderim
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-medium">{calculateOpenRate(log.opened, log.delivered)}% açılma</div>
+                    <div className="font-medium">{campaign.openRate.toFixed(1)}% açılma</div>
                     <div className="text-sm text-muted-foreground">
-                      {log.opened.toLocaleString()} / {log.delivered.toLocaleString()}
+                      {campaign.clickRate.toFixed(1)}% tıklama
                     </div>
                   </div>
                 </div>
               ))}
-          </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="text-muted-foreground">
+                Henüz kampanya performans verisi bulunmuyor
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Bildirim Logları */}
       <Card>
         <CardHeader>
-          <CardTitle>Bildirim Geçmişi</CardTitle>
-          <CardDescription>
-            Gönderilen tüm bildirimlerin detaylı kayıtları
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Bildirim Geçmişi</CardTitle>
+              <CardDescription>
+                Gönderilen tüm bildirimlerin detaylı kayıtları
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetchLogs()}
+              disabled={isLogsLoading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLogsLoading ? 'animate-spin' : ''}`} />
+              Yenile
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {/* Filtreler */}
@@ -275,7 +298,71 @@ export default function NotificationLogsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredLogs.map((log) => (
+              {isLogsLoading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-muted rounded w-1/2"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-24"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-20 mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-16 mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-12"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-16 mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-12"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-16 mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-12"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-muted rounded w-20"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : filteredLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8">
+                    <div className="text-muted-foreground">
+                      Henüz bildirim logu bulunmuyor
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredLogs.map((log: any) => (
                 <TableRow key={log.id}>
                   <TableCell>
                     <div>
@@ -351,7 +438,8 @@ export default function NotificationLogsPage() {
                     </Badge>
                   </TableCell>
                 </TableRow>
-              ))}
+              ))
+            )}
             </TableBody>
           </Table>
         </CardContent>

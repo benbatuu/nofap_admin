@@ -1,15 +1,24 @@
 // API response types
 
 export interface DashboardStats {
-    totalUsers: number
-    activeUsers: number
-    premiumUsers: number
-    bannedUsers: number
-    totalMessages: number
-    pendingMessages: number
-    totalTasks: number
-    activeTasks: number
-    completedTasks: number
+    users:{
+        total: number
+        active: number
+        premium: number
+        banned: number
+    },
+    messages:{
+        total: number
+        replied: number
+        pending: number
+        read: number
+    },
+    tasks:{
+        active: number
+        completed: number
+        expired: number
+        total: number
+    }
 }
 
 export interface Activity {
@@ -34,6 +43,47 @@ export interface SystemStatus {
         status: 'online' | 'offline'
         uptime: string
     }
+}
+
+export interface StatisticData{
+    keyMetrics: {
+        title: string
+        value: string
+        change: string
+        icon: string
+        trend: 'up' | 'down'
+        color: string
+    }[]
+    userGrowthData: {
+        month: string
+        users: number
+    }[]
+    revenueData: {
+        month: string
+        revenue: number
+        transactions: number
+    }[]
+    taskCompletionData: {
+        date: string
+        completed: number
+        total: number
+        completionRate: number
+    }[] 
+    popularCategories: {
+        count: number
+        name: string
+    }[]
+    topUsers: {
+        avatar: string
+        email: string
+        id: string
+        isPremium: boolean
+        name: string
+        streak: number
+        _count:{
+            tasks: number
+        }
+    }[]
 }
 
 export interface MonthlyStats {
@@ -167,3 +217,115 @@ export interface UpdateBlockedUserData {
     status?: 'active' | 'temporary' | 'permanent'
     blockedUntil?: string
 }
+
+export interface BlockedIP {
+    id: string
+    ip: string
+    reason: string
+    location?: string
+    attempts: number
+    status: 'active' | 'temporary' | 'permanent'
+    blockedBy: string
+    blockedDate: string
+}
+
+export interface BlockedIPsResponse {
+    ips: BlockedIP[]
+    pagination: {
+        total: number
+        page: number
+        limit: number
+        totalPages: number
+    }
+    stats: {
+        total: number
+        active: number
+        temporary: number
+        permanent: number
+    }
+}
+
+export interface BlockedIpRequest {
+    id: string
+    ip: string
+    reason: string
+    location?: string
+    attempts: number
+    status: 'active' | 'temporary' | 'permanent'
+}
+
+export interface CreateBlockedIPData {
+    ip: string
+    reason: string
+    location?: string
+    attempts?: number
+    status: 'active' | 'temporary' | 'permanent'
+    blockedBy?: string
+}
+
+export interface UpdateBlockedIPData {
+    ip?: string
+    reason?: string
+    location?: string
+    attempts?: number
+    status?: 'active' | 'temporary' | 'permanent'
+}
+// types/api.ts
+
+export interface RelapseData {
+    id?: string
+    userId: string
+    trigger?: string | null
+    mood?: string | null
+    notes?: string | null
+    severity: 'low' | 'medium' | 'high'
+    previousStreak?: number
+    time?: string | Date | null
+    date?: string | Date
+    recovery?: string | null
+    createdAt?: string
+    updatedAt?: string
+    user?: {
+      name: string
+      email: string
+    }
+  }
+  
+  export interface RelapseFilters {
+    timeFilter?: 'all' | 'today' | 'week' | 'month'
+    severityFilter?: 'all' | 'low' | 'medium' | 'high'
+    page?: number
+    limit?: number
+    userId?: string
+  }
+  
+  export interface RelapseResponse {
+    data: RelapseData[]
+    pagination: {
+      total: number
+      page: number
+      pages: number
+      limit: number
+    }
+  }
+  
+  export interface TriggerStat {
+    trigger: string
+    count: number
+    percentage: string
+  }
+  
+  export interface RelapseStats {
+    today: number
+    week: number
+    month: number
+    averageStreak: number
+    triggerStats: TriggerStat[]
+  }
+  
+  export interface ApiError {
+    message: string
+    status?: number
+    code?: string
+  }
+  

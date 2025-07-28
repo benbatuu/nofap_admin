@@ -45,20 +45,22 @@ export async function GET(request: NextRequest) {
             // Handle notification data transformation from database
             if (user.notifications) {
                 try {
-                    // If notifications is already an object, use it
-                    if (typeof user.notifications === 'object') {
-                        notifications = {
-                            ...defaultNotifications,
-                            ...user.notifications
-                        }
-                    } else if (typeof user.notifications === 'string') {
-                        // If it's a string, try to parse it
-                        const parsed = JSON.parse(user.notifications)
-                        notifications = {
-                            ...defaultNotifications,
-                            ...parsed
-                        }
+                    let parsedNotifications = user.notifications
+                    
+                    // If it's a string, try to parse it
+                    if (typeof user.notifications === 'string') {
+                        parsedNotifications = JSON.parse(user.notifications)
                     }
+                    
+                    // Normalize each notification type to proper structure
+                    const normalizedNotifications = {
+                        motivation: normalizeNotificationSetting(parsedNotifications.motivation),
+                        dailyReminder: normalizeNotificationSetting(parsedNotifications.dailyReminder),
+                        marketing: normalizeNotificationSetting(parsedNotifications.marketing),
+                        system: normalizeNotificationSetting(parsedNotifications.system)
+                    }
+                    
+                    notifications = normalizedNotifications
                 } catch (error) {
                     console.warn(`Failed to parse notifications for user ${user.id}:`, error)
                     // Use default notifications if parsing fails
@@ -150,6 +152,34 @@ export async function PUT(request: NextRequest) {
             { success: false, error: 'Failed to update user notifications' },
             { status: 500 }
         )
+    }
+}
+
+// Helper function to normalize notification setting
+function normalizeNotificationSetting(setting: any) {
+    // If setting is a boolean, apply to all channels
+    if (typeof setting === 'boolean') {
+        return {
+            push: setting,
+            email: setting,
+            sms: setting
+        }
+    }
+    
+    // If setting is an object, ensure all channels exist
+    if (typeof setting === 'object' && setting !== null) {
+        return {
+            push: setting.push || false,
+            email: setting.email || false,
+            sms: setting.sms || false
+        }
+    }
+    
+    // Default to all false if invalid
+    return {
+        push: false,
+        email: false,
+        sms: false
     }
 }
 

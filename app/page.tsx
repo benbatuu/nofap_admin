@@ -59,9 +59,9 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <div className="text-2xl font-bold">{stats?.totalUsers?.toLocaleString() || '0'}</div>
+                <div className="text-2xl font-bold">{stats?.users.total?.toLocaleString() || '0'}</div>
                 <p className="text-xs text-muted-foreground">
-                  Aktif: {stats?.activeUsers || 0}
+                  Aktif: {stats?.users.active || 0}
                 </p>
               </>
             )}
@@ -81,7 +81,7 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <div className="text-2xl font-bold">{stats?.premiumUsers?.toLocaleString() || '0'}</div>
+                <div className="text-2xl font-bold">{stats?.users.premium?.toLocaleString() || '0'}</div>
                 <p className="text-xs text-muted-foreground">
                   Premium aboneler
                 </p>
@@ -103,9 +103,9 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <div className="text-2xl font-bold">{stats?.totalMessages?.toLocaleString() || '0'}</div>
+                <div className="text-2xl font-bold">{stats?.messages?.total?.toLocaleString() || '0'}</div>
                 <p className="text-xs text-muted-foreground">
-                  Bekleyen: {stats?.pendingMessages || 0}
+                  Bekleyen: {stats?.messages?.pending || 0}
                 </p>
               </>
             )}
@@ -125,9 +125,9 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <div className="text-2xl font-bold">{stats?.activeTasks?.toLocaleString() || '0'}</div>
+                <div className="text-2xl font-bold">{stats?.tasks.active?.toLocaleString() || '0'}</div>
                 <p className="text-xs text-muted-foreground">
-                  Tamamlanan: {stats?.completedTasks || 0}
+                  Tamamlanan: {stats?.tasks.completed || 0}
                 </p>
               </>
             )}

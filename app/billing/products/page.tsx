@@ -9,46 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { DollarSign, Package, Plus, Edit, Trash2, Crown, Star } from "lucide-react"
-
-const products = [
-  {
-    id: "1",
-    name: "NoFap Premium",
-    description: "Gelişmiş özellikler ve reklamsız deneyim",
-    price: 9.99,
-    currency: "USD",
-    interval: "monthly",
-    features: ["Reklamsız deneyim", "Gelişmiş istatistikler", "Özel rozetler", "Öncelikli destek"],
-    isActive: true,
-    subscribers: 1850
-  },
-  {
-    id: "2",
-    name: "NoFap Premium Yıllık",
-    description: "Yıllık premium abonelik (%20 indirim)",
-    price: 95.99,
-    currency: "USD",
-    interval: "yearly",
-    features: ["Tüm premium özellikler", "%20 indirim", "Özel topluluk erişimi", "Kişisel koç desteği"],
-    isActive: true,
-    subscribers: 500
-  },
-  {
-    id: "3",
-    name: "Streak Booster",
-    description: "Streak koruma ve motivasyon paketi",
-    price: 4.99,
-    currency: "USD",
-    interval: "monthly",
-    features: ["Streak koruma", "Günlük motivasyon", "Acil durum desteği"],
-    isActive: false,
-    subscribers: 0
-  }
-]
+import { DollarSign, Package, Plus, Edit, Trash2, Crown, Star, RefreshCw, AlertCircle } from "lucide-react"
+import { useProducts, useProductAnalytics, useProductSuggestions, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/use-api"
+import { toast } from "sonner"
 
 export default function ProductsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<any>(null)
   const [newProduct, setNewProduct] = useState({
     name: "",
     description: "",
@@ -56,6 +23,82 @@ export default function ProductsPage() {
     interval: "monthly",
     features: ""
   })
+
+  // API Hooks
+  const { 
+    data: productsData, 
+    isLoading: isProductsLoading,
+    refetch: refetchProducts 
+  } = useProducts({ limit: 50 })
+
+  const { 
+    data: analytics, 
+    isLoading: isAnalyticsLoading 
+  } = useProductAnalytics()
+
+  const { 
+    data: suggestions, 
+    isLoading: isSuggestionsLoading 
+  } = useProductSuggestions()
+
+  const createProductMutation = useCreateProduct()
+  const updateProductMutation = useUpdateProduct()
+  const deleteProductMutation = useDeleteProduct()
+
+  const products = productsData?.data || []
+
+  const handleCreateProduct = async () => {
+    try {
+      const features = newProduct.features.split('\n').filter(f => f.trim())
+      await createProductMutation.mutateAsync({
+        name: newProduct.name,
+        description: newProduct.description,
+        price: parseFloat(newProduct.price),
+        interval: newProduct.interval,
+        features,
+        currency: 'USD'
+      })
+      
+      toast.success('Ürün başarıyla oluşturuldu')
+      setIsCreateDialogOpen(false)
+      setNewProduct({ name: "", description: "", price: "", interval: "monthly", features: "" })
+    } catch (error) {
+      toast.error('Ürün oluşturulurken hata oluştu')
+    }
+  }
+
+  const handleUpdateProduct = async (id: string, data: any) => {
+    try {
+      await updateProductMutation.mutateAsync({ id, data })
+      toast.success('Ürün başarıyla güncellendi')
+      setEditingProduct(null)
+    } catch (error) {
+      toast.error('Ürün güncellenirken hata oluştu')
+    }
+  }
+
+  const handleDeleteProduct = async (id: string) => {
+    if (confirm('Bu ürünü silmek istediğinizden emin misiniz?')) {
+      try {
+        await deleteProductMutation.mutateAsync(id)
+        toast.success('Ürün başarıyla silindi')
+      } catch (error) {
+        toast.error('Ürün silinirken hata oluştu')
+      }
+    }
+  }
+
+  const handleToggleActive = async (product: any) => {
+    try {
+      await updateProductMutation.mutateAsync({
+        id: product.id,
+        data: { isActive: !product.isActive }
+      })
+      toast.success('Ürün durumu güncellendi')
+    } catch (error) {
+      toast.error('Ürün durumu güncellenirken hata oluştu')
+    }
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -102,8 +145,12 @@ export default function ProductsPage() {
                 value={newProduct.features}
                 onChange={(e) => setNewProduct({ ...newProduct, features: e.target.value })}
               />
-              <Button className="w-full" onClick={() => setIsCreateDialogOpen(false)}>
-                Ürün Oluştur
+              <Button 
+                className="w-full" 
+                onClick={handleCreateProduct}
+                disabled={createProductMutation.isPending || !newProduct.name || !newProduct.description || !newProduct.price}
+              >
+                {createProductMutation.isPending ? "Oluşturuluyor..." : "Ürün Oluştur"}
               </Button>
             </div>
           </DialogContent>
@@ -118,8 +165,17 @@ export default function ProductsPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$23,450</div>
-            <p className="text-xs text-muted-foreground">+12% bu ay</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">${analytics?.totalRevenue?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground">+{analytics?.monthlyGrowth?.toFixed(1) || 0}% bu ay</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -129,8 +185,17 @@ export default function ProductsPage() {
             <Crown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2,350</div>
-            <p className="text-xs text-muted-foreground">+8% geçen aydan</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{analytics?.totalSubscribers?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground">+8% geçen aydan</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -140,8 +205,17 @@ export default function ProductsPage() {
             <Star className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">5.2%</div>
-            <p className="text-xs text-muted-foreground">+0.3% artış</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{analytics?.conversionRate?.toFixed(1) || 0}%</div>
+                <p className="text-xs text-muted-foreground">+0.3% artış</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -151,8 +225,17 @@ export default function ProductsPage() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$9.98</div>
-            <p className="text-xs text-muted-foreground">Kullanıcı başına</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">${analytics?.averageRevenuePerUser?.toFixed(2) || 0}</div>
+                <p className="text-xs text-muted-foreground">Kullanıcı başına</p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -160,10 +243,23 @@ export default function ProductsPage() {
       {/* Ürün Listesi */}
       <Card>
         <CardHeader>
-          <CardTitle>Mevcut Ürünler</CardTitle>
-          <CardDescription>
-            Tüm premium ürünleri ve abonelik planları
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Mevcut Ürünler</CardTitle>
+              <CardDescription>
+                Tüm premium ürünleri ve abonelik planları
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetchProducts()}
+              disabled={isProductsLoading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isProductsLoading ? 'animate-spin' : ''}`} />
+              Yenile
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -179,7 +275,58 @@ export default function ProductsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
+              {isProductsLoading ? (
+                Array.from({ length: 3 }).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-32 mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-48"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-12"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-3 bg-muted rounded w-24 mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-20"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-muted rounded w-20"></div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : products.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8">
+                    <div className="text-muted-foreground">
+                      Henüz ürün bulunmuyor
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                products.map((product: any) => (
                 <TableRow key={product.id}>
                   <TableCell>
                     <div>
@@ -203,22 +350,26 @@ export default function ProductsPage() {
                       <span>{product.subscribers.toLocaleString()}</span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Switch checked={product.isActive} />
-                      <Badge variant={product.isActive ? "default" : "secondary"}>
-                        {product.isActive ? "Aktif" : "Pasif"}
-                      </Badge>
-                    </div>
-                  </TableCell>
+                                      <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Switch 
+                          checked={product.isActive} 
+                          onCheckedChange={() => handleToggleActive(product)}
+                          disabled={updateProductMutation.isPending}
+                        />
+                        <Badge variant={product.isActive ? "default" : "secondary"}>
+                          {product.isActive ? "Aktif" : "Pasif"}
+                        </Badge>
+                      </div>
+                    </TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      {product.features.slice(0, 2).map((feature, index) => (
+                      {product.features?.slice(0, 2).map((feature: any, index: any) => (
                         <div key={index} className="text-xs text-muted-foreground">
                           • {feature}
                         </div>
                       ))}
-                      {product.features.length > 2 && (
+                      {product.features?.length > 2 && (
                         <div className="text-xs text-muted-foreground">
                           +{product.features.length - 2} daha...
                         </div>
@@ -227,16 +378,27 @@ export default function ProductsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      <Button variant="ghost" size="sm">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setEditingProduct(product)}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-red-600 dark:text-red-400"
+                        onClick={() => handleDeleteProduct(product.id)}
+                        disabled={deleteProductMutation.isPending}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ))
+            )}
             </TableBody>
           </Table>
         </CardContent>
@@ -253,7 +415,7 @@ export default function ProductsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {products.filter(p => p.isActive).map((product) => (
+              {products.filter((p: any) => p.isActive).map((product: any) => (
                 <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
                     <div className="font-medium">{product.name}</div>
@@ -281,26 +443,38 @@ export default function ProductsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              <div className="p-3 border rounded-lg bg-green-50 dark:bg-green-950/20">
-                <h4 className="font-medium text-green-800 dark:text-green-200">Yıllık Plan Teşviki</h4>
-                <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                  Yıllık plana geçiş için %25 indirim kampanyası düzenlenebilir.
-                </p>
+            {isSuggestionsLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="p-3 border rounded-lg">
+                    <div className="animate-pulse">
+                      <div className="h-4 bg-muted rounded w-32 mb-2"></div>
+                      <div className="h-3 bg-muted rounded w-full"></div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
-                <h4 className="font-medium text-blue-800 dark:text-blue-200">Yeni Özellik Paketi</h4>
-                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                  Streak Booster ürününü yeniden aktifleştirmeyi düşünün.
-                </p>
+            ) : suggestions?.marketingSuggestions ? (
+              <div className="space-y-3">
+                {suggestions.marketingSuggestions.map((suggestion: any, index: any) => (
+                  <div key={index} className="p-3 border rounded-lg bg-green-50 dark:bg-green-950/20">
+                    <h4 className="font-medium text-green-800 dark:text-green-200">{suggestion.strategy}</h4>
+                    <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                      {suggestion.description}
+                    </p>
+                    <div className="text-xs text-green-600 dark:text-green-400 mt-2">
+                      Hedef: {suggestion.targetAudience} • Beklenen Dönüşüm: %{suggestion.expectedConversion}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
-                <h4 className="font-medium text-yellow-800 dark:text-yellow-200">A/B Test Önerisi</h4>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                  Farklı fiyat noktalarında A/B test yapılabilir.
-                </p>
+            ) : (
+              <div className="text-center py-4">
+                <div className="text-muted-foreground">
+                  Henüz öneri bulunmuyor
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

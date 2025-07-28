@@ -11,7 +11,6 @@ export async function GET(request: NextRequest) {
         const isPublished = searchParams.get('isPublished') === 'true' ? true : 
                            searchParams.get('isPublished') === 'false' ? false : undefined
         const search = searchParams.get('search') || undefined
-
         if (page < 1) {
             return NextResponse.json(
                 { success: false, error: 'Page must be greater than 0' },
@@ -37,7 +36,8 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            data: result
+            data: result.faqs,
+            pagination: result.pagination
         })
     } catch (error) {
         console.error('FAQ API Error:', error)

@@ -60,7 +60,6 @@ export class NotificationService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' }
       }),
       prisma.notification.count({ where })
     ])
@@ -210,9 +209,6 @@ export class NotificationService {
       by: ['type'],
       _count: {
         type: true
-      },
-      _sum: {
-        status: true
       }
     })
 

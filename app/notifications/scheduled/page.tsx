@@ -7,80 +7,93 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Calendar, Clock, Users, Play, Pause, Trash2, Edit, Bell } from "lucide-react"
-
-const scheduledNotifications = [
-  {
-    id: "1",
-    title: "Günlük Motivasyon",
-    content: "Bugün harika bir gün! Hedeflerine odaklan ve güçlü kal. 💪",
-    scheduledTime: "2024-01-26 09:00:00",
-    targetGroup: "Tüm Kullanıcılar",
-    targetCount: 45231,
-    status: "active",
-    frequency: "daily",
-    createdBy: "admin",
-    lastRun: "2024-01-25 09:00:00"
-  },
-  {
-    id: "2",
-    title: "Haftalık Özet",
-    content: "Bu hafta nasıl geçti? İstatistiklerini kontrol et ve gelecek hafta için plan yap!",
-    scheduledTime: "2024-01-28 18:00:00",
-    targetGroup: "Aktif Kullanıcılar",
-    targetCount: 38492,
-    status: "active",
-    frequency: "weekly",
-    createdBy: "admin",
-    lastRun: "2024-01-21 18:00:00"
-  },
-  {
-    id: "3",
-    title: "Premium Hatırlatması",
-    content: "Premium özelliklerini keşfet! İlk ay %50 indirimli.",
-    scheduledTime: "2024-01-27 20:00:00",
-    targetGroup: "Ücretsiz Kullanıcılar",
-    targetCount: 42881,
-    status: "paused",
-    frequency: "once",
-    createdBy: "marketing",
-    lastRun: null
-  },
-  {
-    id: "4",
-    title: "Streak Kutlaması",
-    content: "Tebrikler! 30 günlük streak'ini tamamladın! 🎉",
-    scheduledTime: "2024-01-26 12:00:00",
-    targetGroup: "30 Gün Streak",
-    targetCount: 1234,
-    status: "active",
-    frequency: "trigger",
-    createdBy: "system",
-    lastRun: "2024-01-25 15:30:00"
-  },
-  {
-    id: "5",
-    title: "Destek Mesajı",
-    content: "Zorlandığın anları hatırla - sen bundan daha güçlüsün. Topluluk seninle! 🤝",
-    scheduledTime: "2024-01-26 21:00:00",
-    targetGroup: "Zorlanıyor (Streak < 7)",
-    targetCount: 5678,
-    status: "active",
-    frequency: "daily",
-    createdBy: "support",
-    lastRun: "2024-01-25 21:00:00"
-  }
-]
+import { Calendar, Clock, Users, Play, Pause, Trash2, Edit, Bell, RefreshCw } from "lucide-react"
+import { toast } from "sonner"
+import {
+  useScheduledNotifications,
+  useScheduledNotificationAnalytics,
+  useUpcomingNotifications,
+  useNotificationTimeSuggestions,
+  useUpdateScheduledNotification,
+  useDeleteScheduledNotification
+} from "@/hooks/use-api"
 
 export default function ScheduledNotificationsPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [frequencyFilter, setFrequencyFilter] = useState("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
-  const filteredNotifications = scheduledNotifications.filter(notification => {
-    const matchesStatus = statusFilter === "all" || notification.status === statusFilter
-    const matchesFrequency = frequencyFilter === "all" || notification.frequency === frequencyFilter
-    return matchesStatus && matchesFrequency
+  // API Hooks
+  const { 
+    data: notificationsResponse, 
+    isLoading: isNotificationsLoading, 
+    isError: isNotificationsError, 
+    error: notificationsError,
+    refetch: refetchNotifications 
+  } = useScheduledNotifications({
+    page: currentPage,
+    limit: itemsPerPage,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    frequency: frequencyFilter !== 'all' ? frequencyFilter : undefined
   })
+
+  const { 
+    data: analytics, 
+    isLoading: isAnalyticsLoading,
+    refetch: refetchAnalytics 
+  } = useScheduledNotificationAnalytics()
+
+  const { 
+    data: upcomingNotifications, 
+    isLoading: isUpcomingLoading,
+    refetch: refetchUpcoming 
+  } = useUpcomingNotifications({ hours: 24, limit: 3 })
+
+  const { 
+    data: timeSuggestions, 
+    isLoading: isSuggestionsLoading 
+  } = useNotificationTimeSuggestions()
+
+  const updateNotificationMutation = useUpdateScheduledNotification()
+  const deleteNotificationMutation = useDeleteScheduledNotification()
+
+  const handleRefresh = () => {
+    refetchNotifications()
+    refetchAnalytics()
+    refetchUpcoming()
+  }
+
+  const handleToggleStatus = async (id: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'active' ? 'paused' : 'active'
+      await updateNotificationMutation.mutateAsync({ 
+        id, 
+        data: { status: newStatus } 
+      })
+      toast.success(`Bildirim ${newStatus === 'active' ? 'aktif edildi' : 'duraklatıldı'}`)
+    } catch (error) {
+      toast.error('Durum güncellenirken hata oluştu')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu zamanlanmış bildirimi silmek istediğinizden emin misiniz?')) {
+      return
+    }
+
+    try {
+      await deleteNotificationMutation.mutateAsync(id)
+      toast.success('Zamanlanmış bildirim silindi')
+    } catch (error) {
+      toast.error('Silme işlemi sırasında hata oluştu')
+    }
+  }
+
+  const notifications = notificationsResponse?.data || []
+  const pagination = notificationsResponse?.pagination || { total: 0, page: 1, pages: 1, limit: itemsPerPage }
+  
+  const isLoading = isNotificationsLoading || updateNotificationMutation.isPending || deleteNotificationMutation.isPending
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -111,28 +124,45 @@ export default function ScheduledNotificationsPage() {
             Otomatik bildirim kampanyalarını yönetin ve takip edin
           </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>
-              <Bell className="mr-2 h-4 w-4" />
-              Yeni Zamanlama
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Yeni Zamanlanmış Bildirim</DialogTitle>
-              <DialogDescription>
-                Otomatik gönderilecek bir bildirim oluşturun
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Bu özellik yakında eklenecek...
-              </p>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Yenile
+          </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button disabled={isLoading}>
+                <Bell className="mr-2 h-4 w-4" />
+                Yeni Zamanlama
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Yeni Zamanlanmış Bildirim</DialogTitle>
+                <DialogDescription>
+                  Otomatik gönderilecek bir bildirim oluşturun
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Bu özellik yakında eklenecek...
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      {(isNotificationsError) && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {notificationsError?.message || 'Veri yüklenirken hata oluştu'}
+        </div>
+      )}
 
       {/* Genel İstatistikler */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -142,7 +172,9 @@ export default function ScheduledNotificationsPage() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">4</div>
+            <div className="text-2xl font-bold">
+              {isAnalyticsLoading ? "-" : analytics?.activeScheduled || 0}
+            </div>
             <p className="text-xs text-muted-foreground">Çalışan kampanya</p>
           </CardContent>
         </Card>
@@ -153,7 +185,9 @@ export default function ScheduledNotificationsPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
+            <div className="text-2xl font-bold">
+              {isAnalyticsLoading ? "-" : analytics?.todayScheduled || 0}
+            </div>
             <p className="text-xs text-muted-foreground">Bildirim planlandı</p>
           </CardContent>
         </Card>
@@ -164,7 +198,9 @@ export default function ScheduledNotificationsPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">133K</div>
+            <div className="text-2xl font-bold">
+              {isAnalyticsLoading ? "-" : `${Math.round((analytics?.totalTargetUsers || 0) / 1000)}K`}
+            </div>
             <p className="text-xs text-muted-foreground">Kullanıcı erişimi</p>
           </CardContent>
         </Card>
@@ -175,7 +211,9 @@ export default function ScheduledNotificationsPage() {
             <Bell className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">28</div>
+            <div className="text-2xl font-bold">
+              {isAnalyticsLoading ? "-" : analytics?.weeklyDelivered || 0}
+            </div>
             <p className="text-xs text-muted-foreground">Otomatik bildirim</p>
           </CardContent>
         </Card>
@@ -233,81 +271,133 @@ export default function ScheduledNotificationsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredNotifications.map((notification) => (
-                <TableRow key={notification.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{notification.title}</div>
-                      <div className="text-sm text-muted-foreground max-w-xs truncate">
-                        {notification.content}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-sm">
-                        {new Date(notification.scheduledTime).toLocaleString('tr-TR')}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{notification.targetGroup}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {notification.targetCount.toLocaleString()} kullanıcı
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {getFrequencyText(notification.frequency)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={notification.status === "active" ? "default" : "secondary"}
-                      className={getStatusColor(notification.status)}
-                    >
-                      {notification.status === "active" ? "Aktif" :
-                        notification.status === "paused" ? "Duraklatılmış" :
-                          "Tamamlanmış"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      {notification.lastRun ?
-                        new Date(notification.lastRun).toLocaleString('tr-TR') :
-                        "Henüz çalışmadı"
-                      }
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{notification.createdBy}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end space-x-1">
-                      {notification.status === "active" ? (
-                        <Button variant="ghost" size="sm" title="Duraklat">
-                          <Pause className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Button variant="ghost" size="sm" title="Başlat">
-                          <Play className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" title="Düzenle">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" title="Sil" className="text-red-600">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+              {isNotificationsLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    Yükleniyor...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : notifications && notifications.length > 0 ? (
+                notifications.map((notification) => (
+                  <TableRow key={notification.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{notification.title}</div>
+                        <div className="text-sm text-muted-foreground max-w-xs truncate">
+                          {notification.message}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-1">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">
+                          {new Date(notification.scheduledAt).toLocaleString('tr-TR')}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{notification.targetGroup}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {notification.targetCount?.toLocaleString() || 0} kullanıcı
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {getFrequencyText(notification.frequency)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={notification.status === "active" ? "default" : "secondary"}
+                        className={getStatusColor(notification.status)}
+                      >
+                        {notification.status === "active" ? "Aktif" :
+                          notification.status === "paused" ? "Duraklatılmış" :
+                            "Tamamlanmış"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {notification.lastRun ?
+                          new Date(notification.lastRun).toLocaleString('tr-TR') :
+                          "Henüz çalışmadı"
+                        }
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{notification.createdBy || 'admin'}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end space-x-1">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          title={notification.status === "active" ? "Duraklat" : "Başlat"}
+                          onClick={() => handleToggleStatus(notification.id, notification.status)}
+                          disabled={isLoading}
+                        >
+                          {notification.status === "active" ? (
+                            <Pause className="h-4 w-4" />
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button variant="ghost" size="sm" title="Düzenle" disabled={isLoading}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          title="Sil" 
+                          className="text-red-600"
+                          onClick={() => handleDelete(notification.id)}
+                          disabled={isLoading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    Henüz zamanlanmış bildirim bulunmuyor
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
+          
+          {/* Pagination */}
+          {pagination.pages > 1 && (
+            <div className="flex items-center justify-between px-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                Toplam {pagination.total} kayıt, sayfa {pagination.page} / {pagination.pages}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={pagination.page <= 1 || isLoading}
+                >
+                  Önceki
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
+                  disabled={pagination.page >= pagination.pages || isLoading}
+                >
+                  Sonraki
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -321,10 +411,12 @@ export default function ScheduledNotificationsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {scheduledNotifications
-              .filter(n => n.status === "active")
-              .slice(0, 3)
-              .map((notification) => (
+            {isUpcomingLoading ? (
+              <div className="text-center text-muted-foreground py-4">
+                Yükleniyor...
+              </div>
+            ) : upcomingNotifications && upcomingNotifications.length > 0 ? (
+              upcomingNotifications.map((notification) => (
                 <div key={notification.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center space-x-3">
                     <Bell className="h-4 w-4 text-blue-500" />
@@ -337,14 +429,24 @@ export default function ScheduledNotificationsPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-medium">
-                      {new Date(notification.scheduledTime).toLocaleString('tr-TR')}
+                      {new Date(notification.scheduledAt).toLocaleString('tr-TR')}
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {getFrequencyText(notification.frequency)}
-                    </Badge>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="outline" className="text-xs">
+                        {getFrequencyText(notification.frequency)}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {notification.timeUntil}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              ))}
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground py-4">
+                Yaklaşan bildirim bulunmuyor
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -359,24 +461,42 @@ export default function ScheduledNotificationsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
-              <h4 className="font-medium text-blue-800 dark:text-blue-200">Optimal Saatler</h4>
-              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                En yüksek açılma oranları: 09:00-10:00 ve 20:00-21:00 arası. Bu saatlerde bildirim planlaması önerilir.
-              </p>
-            </div>
-            <div className="p-4 border rounded-lg bg-green-50 dark:bg-green-950/20">
-              <h4 className="font-medium text-green-800 dark:text-green-200">Haftalık Dağılım</h4>
-              <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                Pazartesi ve Çarşamba günleri en yüksek etkileşim oranları. Önemli kampanyalar bu günlere planlanabilir.
-              </p>
-            </div>
-            <div className="p-4 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
-              <h4 className="font-medium text-yellow-800 dark:text-yellow-200">Sıklık Optimizasyonu</h4>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                Günlük bildirimler %23 açılma oranına sahip. Haftalık bildirimlerde %31 oranı görülüyor.
-              </p>
-            </div>
+            {isSuggestionsLoading ? (
+              <div className="text-center text-muted-foreground py-4">
+                Yükleniyor...
+              </div>
+            ) : timeSuggestions && timeSuggestions.length > 0 ? (
+              timeSuggestions.slice(0, 3).map((suggestion, index) => (
+                <div 
+                  key={suggestion.hour} 
+                  className={`p-4 border rounded-lg ${
+                    suggestion.recommendation === 'high' ? 'bg-green-50 dark:bg-green-950/20' :
+                    suggestion.recommendation === 'medium' ? 'bg-blue-50 dark:bg-blue-950/20' :
+                    'bg-yellow-50 dark:bg-yellow-950/20'
+                  }`}
+                >
+                  <h4 className={`font-medium ${
+                    suggestion.recommendation === 'high' ? 'text-green-800 dark:text-green-200' :
+                    suggestion.recommendation === 'medium' ? 'text-blue-800 dark:text-blue-200' :
+                    'text-yellow-800 dark:text-yellow-200'
+                  }`}>
+                    {String(suggestion.hour).padStart(2, '0')}:00 - {suggestion.description}
+                  </h4>
+                  <p className={`text-sm mt-1 ${
+                    suggestion.recommendation === 'high' ? 'text-green-700 dark:text-green-300' :
+                    suggestion.recommendation === 'medium' ? 'text-blue-700 dark:text-blue-300' :
+                    'text-yellow-700 dark:text-yellow-300'
+                  }`}>
+                    Açılma oranı: %{suggestion.openRate} • Tıklama oranı: %{suggestion.clickRate} • 
+                    Kullanıcı aktivitesi: %{suggestion.userActivity}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground py-4">
+                Öneri verisi yüklenemedi
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

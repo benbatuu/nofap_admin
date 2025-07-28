@@ -17,23 +17,39 @@ import {
   Download,
   Settings,
   Loader2,
-  TrendingUp
+  TrendingUp,
+  Edit,
+  Copy,
+  FileText,
+  Search,
+  AlertCircle
 } from 'lucide-react';
-import { useTasks } from '@/hooks/use-api';
-import { TaskService } from '@/lib/services';
+import { useTasks, useCreateTask, useGenerateAITask, useBulkGenerateAITasks, useRegenerateTask } from '@/hooks/use-api';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function TasksPage() {
+  const queryClient = useQueryClient();
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState('all');
   const [selectedUser, setSelectedUser] = useState('all');
   const [selectedDateRange, setSelectedDateRange] = useState('all');
-  const [searchSlipId, setSearchSlipId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showTemplatesListModal, setShowTemplatesListModal] = useState(false);
+  const [showAIGenerateModal, setShowAIGenerateModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<any>(null);
   const [analytics, setAnalytics] = useState<any>(null);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageLimit, setPageLimit] = useState(20);
 
   // Form states
   const [newTask, setNewTask] = useState({
@@ -43,7 +59,16 @@ export default function TasksPage() {
     difficulty: 'easy',
     userId: '',
     userName: '',
-    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    aiConfidence: 85,
+    slipId: ''
+  });
+
+  const [aiGenerateForm, setAiGenerateForm] = useState({
+    userId: '',
+    userName: '',
+    slipId: '',
+    taskType: 'single'
   });
 
   const [newTemplate, setNewTemplate] = useState({
@@ -51,8 +76,21 @@ export default function TasksPage() {
     description: '',
     category: 'Mindfulness',
     difficulty: 'easy',
-    tags: []
+    tags: [],
+    estimatedDuration: 30
   });
+
+  // Available categories and difficulties
+  const categories = [
+    'Mindfulness', 'Physical', 'Mental', 'Social', 'Digital', 
+    'Productivity', 'Health', 'Learning', 'Creative', 'Spiritual'
+  ];
+  
+  const difficulties = [
+    { value: 'easy', label: 'Kolay', color: 'text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-950/20' },
+    { value: 'medium', label: 'Orta', color: 'text-yellow-600 bg-yellow-50 dark:text-yellow-400 dark:bg-yellow-950/20' },
+    { value: 'hard', label: 'Zor', color: 'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950/20' }
+  ];
 
   // API hook for fetching tasks
   const {
@@ -61,12 +99,17 @@ export default function TasksPage() {
     error,
     refetch,
   } = useTasks({
-    page: 1,
-    limit: 100,
+    page: currentPage,
+    limit: pageLimit,
     status: selectedStatus !== 'all' ? selectedStatus : undefined,
-    category: selectedUser !== 'all' ? selectedUser : undefined,
-    search: searchSlipId || undefined
+    userId: selectedUser !== 'all' ? selectedUser : undefined,
+    search: searchQuery || undefined
   });
+
+  const createTaskMutation = useCreateTask();
+  const generateAITaskMutation = useGenerateAITask();
+  const bulkGenerateAITasksMutation = useBulkGenerateAITasks();
+  const regenerateTaskMutation = useRegenerateTask();
 
   const tasks = tasksData?.tasks || [];
 
@@ -163,8 +206,12 @@ export default function TasksPage() {
   const filteredTasks = useMemo(() => {
     return displayTasks.filter(task => {
       if (selectedStatus !== 'all' && task.status !== selectedStatus) return false;
+      if (selectedCategory !== 'all' && task.category !== selectedCategory) return false;
+      if (selectedDifficulty !== 'all' && task.difficulty !== selectedDifficulty) return false;
       if (selectedUser !== 'all' && task.userId !== selectedUser) return false;
-      if (searchSlipId && (!task.slipId || !task.slipId.includes(searchSlipId))) return false;
+      if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase()) && 
+          !task.description.toLowerCase().includes(searchQuery.toLowerCase()) &&
+          !task.userName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       if (selectedDateRange !== 'all') {
         const taskDate = new Date(task.createdDate || task.createdAt);
         const today = new Date();
@@ -176,7 +223,7 @@ export default function TasksPage() {
       }
       return true;
     });
-  }, [displayTasks, selectedStatus, selectedUser, selectedDateRange, searchSlipId]);
+  }, [displayTasks, selectedStatus, selectedCategory, selectedDifficulty, selectedUser, selectedDateRange, searchQuery]);
 
   // İstatistikler
   const stats = useMemo(() => {
@@ -210,7 +257,7 @@ export default function TasksPage() {
         format,
         ...(selectedStatus !== 'all' && { status: selectedStatus }),
         ...(selectedUser !== 'all' && { userId: selectedUser }),
-        ...(searchSlipId && { search: searchSlipId })
+        ...(searchQuery && { search: searchQuery })
       });
 
       const response = await fetch(`/api/tasks/export?${params}`);
@@ -231,6 +278,21 @@ export default function TasksPage() {
     }
   };
 
+  const loadTemplates = async () => {
+    try {
+      setIsLoadingTemplates(true);
+      const response = await fetch('/api/tasks/templates');
+      const data = await response.json();
+      if (data.success) {
+        setTemplates(data.data);
+      }
+    } catch (error) {
+      console.error('Error loading templates:', error);
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
+
   const handleCreateTask = async () => {
     if (!newTask.title || !newTask.description || !newTask.userId || !newTask.userName) {
       alert('Lütfen tüm alanları doldurun');
@@ -239,7 +301,7 @@ export default function TasksPage() {
 
     try {
       setIsUpdating(true);
-      await TaskService.createTask({
+      const response = await createTaskMutation.mutateAsync({
         ...newTask,
         dueDate: new Date(newTask.dueDate)
       });
@@ -251,14 +313,52 @@ export default function TasksPage() {
         difficulty: 'easy',
         userId: '',
         userName: '',
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        aiConfidence: 85,
+        slipId: ''
       });
 
       setShowCreateModal(false);
-      refetch();
+      alert('Görev başarıyla oluşturuldu');
     } catch (error) {
       console.error('Error creating task:', error);
       alert('Görev oluşturulurken bir hata oluştu');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleEditTask = async () => {
+    if (!editingTask || !editingTask.title || !editingTask.description) {
+      alert('Lütfen tüm alanları doldurun');
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      const response = await fetch(`/api/tasks/${editingTask.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editingTask.title,
+          description: editingTask.description,
+          category: editingTask.category,
+          difficulty: editingTask.difficulty,
+          dueDate: new Date(editingTask.dueDate),
+          aiConfidence: editingTask.aiConfidence,
+          slipId: editingTask.slipId
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to update task');
+
+      setEditingTask(null);
+      setShowEditModal(false);
+      refetch();
+      alert('Görev başarıyla güncellendi');
+    } catch (error) {
+      console.error('Error updating task:', error);
+      alert('Görev güncellenirken bir hata oluştu');
     } finally {
       setIsUpdating(false);
     }
@@ -285,14 +385,45 @@ export default function TasksPage() {
         description: '',
         category: 'Mindfulness',
         difficulty: 'easy',
-        tags: []
+        tags: [],
+        estimatedDuration: 30
       });
 
       setShowTemplateModal(false);
+      loadTemplates(); // Reload templates
       alert('Şablon başarıyla oluşturuldu');
     } catch (error) {
       console.error('Error creating template:', error);
       alert('Şablon oluşturulurken bir hata oluştu');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleCreateTaskFromTemplate = async (template: any) => {
+    if (!newTask.userId || !newTask.userName) {
+      alert('Lütfen kullanıcı bilgilerini doldurun');
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      const response = await createTaskMutation.mutateAsync({
+        title: template.title,
+        description: template.description,
+        category: template.category,
+        difficulty: template.difficulty,
+        userId: newTask.userId,
+        userName: newTask.userName,
+        dueDate: new Date(newTask.dueDate),
+        aiConfidence: template.aiConfidence || 85
+      });
+
+      setShowTemplatesListModal(false);
+      alert('Şablondan görev başarıyla oluşturuldu');
+    } catch (error) {
+      console.error('Error creating task from template:', error);
+      alert('Şablondan görev oluşturulurken bir hata oluştu');
     } finally {
       setIsUpdating(false);
     }
@@ -338,29 +469,105 @@ export default function TasksPage() {
     }
   };
 
-  const handleRegenerateTask = (taskId) => {
-    // Belirli bir görevi yeniden üret
-    alert(`Görev #${taskId} için AI yeni görev üretiyor...`);
+  const handleRegenerateTask = async (taskId) => {
+    if (!confirm('Bu görev AI tarafından yeniden oluşturulacak. Devam etmek istiyor musunuz?')) return;
+
+    try {
+      setIsUpdating(true);
+      const response = await regenerateTaskMutation.mutateAsync(taskId);
+      
+      if (response.success) {
+        alert('Görev AI tarafından başarıyla yeniden oluşturuldu!');
+        refetch();
+      } else {
+        throw new Error(response.error || 'Görev yeniden oluşturulamadı');
+      }
+    } catch (error) {
+      console.error('Error regenerating task:', error);
+      alert('Görev yeniden oluşturulurken bir hata oluştu: ' + error.message);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleDeleteTask = async (taskId) => {
     if (!confirm('Bu görevi silmek istediğinizden emin misiniz?')) return;
 
     try {
-      await TaskService.deleteTask(taskId);
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) throw new Error('Failed to delete task');
+      
       refetch();
+      alert('Görev başarıyla silindi');
     } catch (error) {
       console.error('Error deleting task:', error);
       alert('Görev silinirken bir hata oluştu');
     }
   };
 
-  const handleGenerateAllTasks = () => {
-    // Tüm kullanıcılar için yeni görevler üret
-    alert('AI tüm kullanıcılar için yeni görevler üretiyor...');
+  const handleGenerateAllTasks = async () => {
+    if (!confirm('Tüm aktif kullanıcılar için AI görevleri oluşturulacak. Bu işlem biraz zaman alabilir. Devam etmek istiyor musunuz?')) return;
+
+    try {
+      setIsUpdating(true);
+      const response = await bulkGenerateAITasksMutation.mutateAsync({});
+      
+      if (response.success) {
+        const { totalUsers, successfulUsers, totalTasksCreated } = response.data;
+        alert(`Başarılı! ${successfulUsers}/${totalUsers} kullanıcı için toplam ${totalTasksCreated} görev oluşturuldu.`);
+        refetch();
+      } else {
+        throw new Error(response.error || 'Toplu görev oluşturma başarısız');
+      }
+    } catch (error) {
+      console.error('Error generating bulk tasks:', error);
+      alert('Toplu görev oluşturulurken bir hata oluştu: ' + error.message);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const uniqueUsers = [...new Set(displayTasks.map(t => ({ id: t.userId, name: t.userName })))];
+
+  const handleGenerateAITask = async () => {
+    if (!aiGenerateForm.userId || !aiGenerateForm.userName) {
+      alert('Lütfen kullanıcı bilgilerini doldurun');
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      const response = await generateAITaskMutation.mutateAsync({
+        userId: aiGenerateForm.userId,
+        slipId: aiGenerateForm.slipId || undefined,
+        taskType: aiGenerateForm.taskType
+      });
+      
+      if (response.success) {
+        const taskCount = response.data.count;
+        alert(`${taskCount} AI görev(i) başarıyla oluşturuldu!`);
+        setShowAIGenerateModal(false);
+        setAiGenerateForm({
+          userId: '',
+          userName: '',
+          slipId: '',
+          taskType: 'single'
+        });
+        refetch();
+      } else {
+        throw new Error(response.error || 'AI görev oluşturma başarısız');
+      }
+    } catch (error) {
+      console.error('Error generating AI task:', error);
+      alert('AI görev oluşturulurken bir hata oluştu: ' + error.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
@@ -408,15 +615,37 @@ export default function TasksPage() {
             className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors text-sm"
           >
             <Settings className="w-4 h-4" />
-            Şablon
+            Yeni Şablon
+          </button>
+
+          {/* Templates List Button */}
+          <button
+            onClick={() => {
+              setShowTemplatesListModal(true);
+              loadTemplates();
+            }}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+          >
+            <FileText className="w-4 h-4" />
+            Şablonlar
+          </button>
+
+          {/* AI Task Generation Button */}
+          <button
+            onClick={() => setShowAIGenerateModal(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-sm"
+          >
+            <Brain className="w-4 h-4" />
+            AI Görev Üret
           </button>
 
           <button
             onClick={handleGenerateAllTasks}
-            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors text-sm"
+            disabled={isUpdating}
+            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors text-sm"
           >
-            <RefreshCw className="w-4 h-4" />
-            Tüm Görevleri Yenile
+            {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            AI Görev Üret (Tümü)
           </button>
         </div>
       </div>
@@ -476,13 +705,13 @@ export default function TasksPage() {
 
       {/* Filtreler */}
       <div className="bg-card p-4 rounded-lg border">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">Filtreler:</span>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
@@ -492,6 +721,28 @@ export default function TasksPage() {
               <option value="active">Aktif</option>
               <option value="completed">Tamamlandı</option>
               <option value="expired">Süresi Doldu</option>
+            </select>
+
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="all">Tüm Kategoriler</option>
+              {categories.map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+
+            <select
+              value={selectedDifficulty}
+              onChange={(e) => setSelectedDifficulty(e.target.value)}
+              className="px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="all">Tüm Zorluklar</option>
+              {difficulties.map(diff => (
+                <option key={diff.value} value={diff.value}>{diff.label}</option>
+              ))}
             </select>
 
             <select
@@ -516,13 +767,16 @@ export default function TasksPage() {
               <option value="month">Son 30 Gün</option>
             </select>
 
-            <input
-              type="text"
-              placeholder="Slip ID ara..."
-              value={searchSlipId}
-              onChange={(e) => setSearchSlipId(e.target.value)}
-              className="px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Görev ara..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring w-full"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -555,6 +809,39 @@ export default function TasksPage() {
                 className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 disabled:opacity-50"
               >
                 Sil
+              </button>
+              <button
+                onClick={async () => {
+                  if (selectedTasks.length === 0) return;
+                  
+                  const selectedTaskObjects = displayTasks.filter(task => 
+                    selectedTasks.includes(task.id.toString())
+                  );
+                  
+                  const uniqueUserIds = [...new Set(selectedTaskObjects.map(task => task.userId))];
+                  
+                  if (!confirm(`Seçilen görevlerin kullanıcıları (${uniqueUserIds.length} kullanıcı) için AI görevleri oluşturulacak. Devam etmek istiyor musunuz?`)) return;
+                  
+                  try {
+                    setIsUpdating(true);
+                    const response = await bulkGenerateAITasksMutation.mutateAsync({
+                      userIds: uniqueUserIds
+                    });
+                    
+                    if (response.success) {
+                      alert(`${response.data.successfulUsers} kullanıcı için ${response.data.totalTasksCreated} AI görev oluşturuldu!`);
+                      setSelectedTasks([]);
+                    }
+                  } catch (error) {
+                    alert('AI görev oluşturma hatası: ' + error.message);
+                  } finally {
+                    setIsUpdating(false);
+                  }
+                }}
+                disabled={isUpdating}
+                className="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded text-sm hover:from-purple-700 hover:to-pink-700 disabled:opacity-50"
+              >
+                AI Görev Üret
               </button>
               <button
                 onClick={() => setSelectedTasks([])}
@@ -643,11 +930,26 @@ export default function TasksPage() {
                     </button>
 
                     <button
-                      onClick={() => handleRegenerateTask(task.id)}
-                      className="p-2 text-muted-foreground hover:bg-muted rounded-md transition-colors"
-                      title="Bu Görevi Yeniden Üret"
+                      onClick={() => {
+                        setEditingTask({
+                          ...task,
+                          dueDate: task.dueDate.split('T')[0] || task.dueDate
+                        });
+                        setShowEditModal(true);
+                      }}
+                      className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-md transition-colors"
+                      title="Düzenle"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <Edit className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => handleRegenerateTask(task.id)}
+                      disabled={isUpdating}
+                      className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/20 rounded-md transition-colors disabled:opacity-50"
+                      title="AI ile Yeniden Üret"
+                    >
+                      {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     </button>
 
                     <button
@@ -829,11 +1131,9 @@ export default function TasksPage() {
                     value={newTask.category}
                     onChange={(e) => setNewTask({ ...newTask, category: e.target.value })}
                   >
-                    <option value="Mindfulness">Mindfulness</option>
-                    <option value="Physical">Physical</option>
-                    <option value="Mental">Mental</option>
-                    <option value="Social">Social</option>
-                    <option value="Digital">Digital</option>
+                    {categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -844,9 +1144,9 @@ export default function TasksPage() {
                     value={newTask.difficulty}
                     onChange={(e) => setNewTask({ ...newTask, difficulty: e.target.value })}
                   >
-                    <option value="easy">Kolay</option>
-                    <option value="medium">Orta</option>
-                    <option value="hard">Zor</option>
+                    {difficulties.map(diff => (
+                      <option key={diff.value} value={diff.value}>{diff.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -875,13 +1175,38 @@ export default function TasksPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Bitiş Tarihi</label>
+                  <input
+                    type="date"
+                    className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={newTask.dueDate}
+                    onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">AI Güven Oranı (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={newTask.aiConfidence}
+                    onChange={(e) => setNewTask({ ...newTask, aiConfidence: parseInt(e.target.value) })}
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-sm font-medium mb-2">Bitiş Tarihi</label>
+                <label className="block text-sm font-medium mb-2">Slip ID (Opsiyonel)</label>
                 <input
-                  type="date"
+                  type="text"
                   className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                  value={newTask.dueDate}
-                  onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                  placeholder="slip_001"
+                  value={newTask.slipId}
+                  onChange={(e) => setNewTask({ ...newTask, slipId: e.target.value })}
                 />
               </div>
 
@@ -951,11 +1276,9 @@ export default function TasksPage() {
                     value={newTemplate.category}
                     onChange={(e) => setNewTemplate({ ...newTemplate, category: e.target.value })}
                   >
-                    <option value="Mindfulness">Mindfulness</option>
-                    <option value="Physical">Physical</option>
-                    <option value="Mental">Mental</option>
-                    <option value="Social">Social</option>
-                    <option value="Digital">Digital</option>
+                    {categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -966,11 +1289,24 @@ export default function TasksPage() {
                     value={newTemplate.difficulty}
                     onChange={(e) => setNewTemplate({ ...newTemplate, difficulty: e.target.value })}
                   >
-                    <option value="easy">Kolay</option>
-                    <option value="medium">Orta</option>
-                    <option value="hard">Zor</option>
+                    {difficulties.map(diff => (
+                      <option key={diff.value} value={diff.value}>{diff.label}</option>
+                    ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Tahmini Süre (dakika)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1440"
+                  className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="30"
+                  value={newTemplate.estimatedDuration}
+                  onChange={(e) => setNewTemplate({ ...newTemplate, estimatedDuration: parseInt(e.target.value) })}
+                />
               </div>
 
               <div className="flex justify-end gap-3">
@@ -987,6 +1323,343 @@ export default function TasksPage() {
                 >
                   {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
                   Şablon Oluştur
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Task Modal */}
+      {showEditModal && editingTask && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-background border rounded-lg max-w-2xl w-full">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-lg font-semibold">Görevi Düzenle</h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Başlık</label>
+                <input
+                  type="text"
+                  className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Görev başlığı"
+                  value={editingTask.title}
+                  onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Açıklama</label>
+                <textarea
+                  className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  rows={4}
+                  placeholder="Görev açıklaması"
+                  value={editingTask.description}
+                  onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Kategori</label>
+                  <select
+                    className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={editingTask.category}
+                    onChange={(e) => setEditingTask({ ...editingTask, category: e.target.value })}
+                  >
+                    {categories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Zorluk</label>
+                  <select
+                    className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={editingTask.difficulty}
+                    onChange={(e) => setEditingTask({ ...editingTask, difficulty: e.target.value })}
+                  >
+                    {difficulties.map(diff => (
+                      <option key={diff.value} value={diff.value}>{diff.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Bitiş Tarihi</label>
+                  <input
+                    type="date"
+                    className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={editingTask.dueDate}
+                    onChange={(e) => setEditingTask({ ...editingTask, dueDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">AI Güven Oranı (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={editingTask.aiConfidence}
+                    onChange={(e) => setEditingTask({ ...editingTask, aiConfidence: parseInt(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Slip ID (Opsiyonel)</label>
+                <input
+                  type="text"
+                  className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="slip_001"
+                  value={editingTask.slipId || ''}
+                  onChange={(e) => setEditingTask({ ...editingTask, slipId: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleEditTask}
+                  disabled={isUpdating}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Güncelle
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Templates List Modal */}
+      {showTemplatesListModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-background border rounded-lg max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-lg font-semibold">Görev Şablonları</h3>
+              <button
+                onClick={() => setShowTemplatesListModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {isLoadingTemplates ? (
+                <div className="flex items-center justify-center h-32">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : templates.length === 0 ? (
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Henüz şablon oluşturulmamış.</p>
+                  <button
+                    onClick={() => {
+                      setShowTemplatesListModal(false);
+                      setShowTemplateModal(true);
+                    }}
+                    className="mt-4 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    İlk Şablonu Oluştur
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="mb-4">
+                    <p className="text-sm text-muted-foreground">
+                      Şablondan görev oluşturmak için kullanıcı bilgilerini doldurun:
+                    </p>
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      <input
+                        type="text"
+                        placeholder="Kullanıcı ID"
+                        className="px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        value={newTask.userId}
+                        onChange={(e) => setNewTask({ ...newTask, userId: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Kullanıcı Adı"
+                        className="px-3 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        value={newTask.userName}
+                        onChange={(e) => setNewTask({ ...newTask, userName: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {templates.map(template => (
+                    <div key={template.id} className="bg-muted p-4 rounded-lg">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-medium mb-2">{template.title}</h4>
+                          <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Target className="w-3 h-3" />
+                              {template.category}
+                            </span>
+                            <span className={`px-2 py-1 rounded-md ${difficultyConfig[template.difficulty]?.color}`}>
+                              {difficultyConfig[template.difficulty]?.label}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Brain className="w-3 h-3" />
+                              {template.aiConfidence}%
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleCreateTaskFromTemplate(template)}
+                          disabled={isUpdating || !newTask.userId || !newTask.userName}
+                          className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+                        >
+                          <Copy className="w-4 h-4" />
+                          Kullan
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Task Generation Modal */}
+      {showAIGenerateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-background border rounded-lg max-w-2xl w-full">
+            <div className="flex justify-between items-center p-6 border-b">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-purple-600" />
+                <h3 className="text-lg font-semibold">AI Görev Oluştur</h3>
+              </div>
+              <button
+                onClick={() => setShowAIGenerateModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 p-4 rounded-lg border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm font-medium text-purple-800 dark:text-purple-200">AI Görev Oluşturucu</span>
+                </div>
+                <p className="text-xs text-purple-700 dark:text-purple-300">
+                  Yapay zeka, kullanıcının geçmiş verilerini ve slip bilgilerini analiz ederek kişiselleştirilmiş görevler oluşturur.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Kullanıcı ID *</label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="user_123"
+                    value={aiGenerateForm.userId}
+                    onChange={(e) => setAiGenerateForm({ ...aiGenerateForm, userId: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Kullanıcı Adı *</label>
+                  <input
+                    type="text"
+                    className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="Ahmet K."
+                    value={aiGenerateForm.userName}
+                    onChange={(e) => setAiGenerateForm({ ...aiGenerateForm, userName: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Slip ID (Opsiyonel)</label>
+                <input
+                  type="text"
+                  className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="slip_001 - AI bu slip'e göre özel görevler oluşturacak"
+                  value={aiGenerateForm.slipId}
+                  onChange={(e) => setAiGenerateForm({ ...aiGenerateForm, slipId: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Slip ID girilirse, AI o slip'in tetikleyicilerine ve durumuna göre özel görevler oluşturur.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Görev Türü</label>
+                <select
+                  className="w-full p-3 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={aiGenerateForm.taskType}
+                  onChange={(e) => setAiGenerateForm({ ...aiGenerateForm, taskType: e.target.value })}
+                >
+                  <option value="single">Tek Görev</option>
+                  <option value="bulk">Çoklu Görev (5 adet)</option>
+                  <option value="personalized">Kişiselleştirilmiş Paket</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {aiGenerateForm.taskType === 'single' && 'AI tek bir görev oluşturacak'}
+                  {aiGenerateForm.taskType === 'bulk' && 'AI 5 farklı kategoride görev oluşturacak'}
+                  {aiGenerateForm.taskType === 'personalized' && 'AI kullanıcının geçmişine göre özel görev paketi oluşturacak'}
+                </p>
+              </div>
+
+              <div className="bg-muted p-4 rounded-lg">
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  AI Nasıl Çalışır?
+                </h4>
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  <li>• Kullanıcının streak durumunu analiz eder</li>
+                  <li>• Geçmiş görev tamamlama oranlarını inceler</li>
+                  <li>• Slip verilerinden tetikleyicileri tespit eder</li>
+                  <li>• Kişiselleştirilmiş zorluk seviyesi belirler</li>
+                  <li>• Uygun kategori ve zamanlama önerir</li>
+                  <li>• Motivasyonel açıklamalar ekler</li>
+                </ul>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => setShowAIGenerateModal(false)}
+                  className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleGenerateAITask}
+                  disabled={isUpdating || !aiGenerateForm.userId || !aiGenerateForm.userName}
+                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <Brain className="w-4 h-4" />
+                  AI Görev Oluştur
                 </button>
               </div>
             </div>

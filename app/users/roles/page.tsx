@@ -11,8 +11,14 @@ import {
   Search,
   UserCheck,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Settings,
+  Lock,
+  Unlock,
+  Copy,
+  Download
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   useRoles,
   usePermissions,
@@ -38,8 +44,9 @@ function RolesPageContent() {
   const [mounted, setMounted] = useState(false);
 
   // API hooks - fetch all data without search parameter
-  const { data: allRoles = [], isLoading: rolesLoading, error: rolesError } = useRoles({ search: '' });
-  const { data: allPermissions = [], isLoading: permissionsLoading, error: permissionsError } = usePermissions({ search: '' });
+  const { data: allRoles, isLoading: rolesLoading, error: rolesError } = useRoles();
+  const { data: allPermissions, isLoading: permissionsLoading, error: permissionsError } = usePermissions();
+
   const { data: dashboardStats, isLoading: statsLoading } = useDashboardStats();
 
   // Handle hydration
@@ -50,7 +57,7 @@ function RolesPageContent() {
   // Mutation hooks
   const createRoleMutation = useCreateRole();
   const updateRoleMutation = useUpdateRole();
-  const deleteRoleMutation = useDeleteRole();
+  const deleteRoleMutation = useDeleteRole(); 
   const createPermissionMutation = useCreatePermission();
   const updatePermissionMutation = useUpdatePermission();
   const deletePermissionMutation = useDeletePermission();
@@ -64,7 +71,6 @@ function RolesPageContent() {
 
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
-  const [showBulkActions, setShowBulkActions] = useState(false);
   const [showPermissionAssignment, setShowPermissionAssignment] = useState(false);
   const [assigningRole, setAssigningRole] = useState<Role | null>(null);
 
@@ -161,24 +167,41 @@ function RolesPageContent() {
   }
 
   const handleCreate = async () => {
+    // Validation
+    if (!formData.name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!formData.description.trim()) {
+      toast.error('Description is required');
+      return;
+    }
+    if (activeTab === 'permissions' && !formData.category.trim()) {
+      toast.error('Category is required for permissions');
+      return;
+    }
+
     try {
       if (activeTab === 'roles') {
         await createRoleMutation.mutateAsync({
-          name: formData.name,
-          description: formData.description,
+          name: formData.name.trim(),
+          description: formData.description.trim(),
           permissions: formData.permissions
         });
+        toast.success(`Role "${formData.name}" created successfully`);
       } else {
         await createPermissionMutation.mutateAsync({
-          name: formData.name,
-          description: formData.description,
-          category: formData.category || 'General'
+          name: formData.name.trim(),
+          description: formData.description.trim(),
+          category: formData.category.trim() || 'General'
         });
+        toast.success(`Permission "${formData.name}" created successfully`);
       }
       setShowCreateModal(false);
       setFormData({ name: '', description: '', permissions: [], category: '' });
     } catch (error) {
       console.error('Create error:', error);
+      toast.error(`Failed to create ${activeTab === 'roles' ? 'role' : 'permission'}`);
     }
   };
 
@@ -196,43 +219,73 @@ function RolesPageContent() {
   const handleUpdate = async () => {
     if (!editingItem) return;
 
+    // Validation
+    if (!formData.name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!formData.description.trim()) {
+      toast.error('Description is required');
+      return;
+    }
+    if (activeTab === 'permissions' && !formData.category.trim()) {
+      toast.error('Category is required for permissions');
+      return;
+    }
+
     try {
       if (activeTab === 'roles') {
         await updateRoleMutation.mutateAsync({
           id: editingItem.id,
           data: {
-            name: formData.name,
-            description: formData.description,
+            name: formData.name.trim(),
+            description: formData.description.trim(),
             permissions: formData.permissions
           }
         });
+        toast.success(`Role "${formData.name}" updated successfully`);
       } else {
         await updatePermissionMutation.mutateAsync({
           id: editingItem.id,
           data: {
-            name: formData.name,
-            description: formData.description,
-            category: formData.category
+            name: formData.name.trim(),
+            description: formData.description.trim(),
+            category: formData.category.trim()
           }
         });
+        toast.success(`Permission "${formData.name}" updated successfully`);
       }
       setShowCreateModal(false);
       setEditingItem(null);
       setFormData({ name: '', description: '', permissions: [], category: '' });
     } catch (error) {
       console.error('Update error:', error);
+      toast.error(`Failed to update ${activeTab === 'roles' ? 'role' : 'permission'}`);
     }
   };
 
   const handleDelete = async (id: string) => {
+    const item = activeTab === 'roles' 
+      ? roles.find(r => r.id === id)
+      : permissions.find(p => p.id === id);
+    
+    if (!item) return;
+
+    if (!confirm(`Are you sure you want to delete "${item.name}"? This action cannot be undone.`)) {
+      return;
+    }
+
     try {
       if (activeTab === 'roles') {
         await deleteRoleMutation.mutateAsync(id);
+        toast.success(`Role "${item.name}" deleted successfully`);
       } else {
         await deletePermissionMutation.mutateAsync(id);
+        toast.success(`Permission "${item.name}" deleted successfully`);
       }
     } catch (error) {
       console.error('Delete error:', error);
+      toast.error(`Failed to delete ${activeTab === 'roles' ? 'role' : 'permission'}`);
     }
   };
 
@@ -309,8 +362,64 @@ function RolesPageContent() {
       });
       setShowPermissionAssignment(false);
       setAssigningRole(null);
+      toast.success(`Permissions updated for ${assigningRole.name}`);
     } catch (error) {
       console.error('Update role permissions error:', error);
+      toast.error('Failed to update permissions');
+    }
+  };
+
+  // Export functionality
+  const exportToCSV = () => {
+    const data = activeTab === 'roles' ? roles : permissions;
+    const headers = activeTab === 'roles' 
+      ? ['ID', 'Name', 'Description', 'User Count', 'Permissions']
+      : ['ID', 'Name', 'Description', 'Category', 'Roles Count'];
+    
+    const rows = data.map(item => {
+      if (activeTab === 'roles') {
+        const role = item as Role;
+        return [
+          role.id,
+          role.name,
+          role.description,
+          role.userCount,
+          role.permissions.join('; ')
+        ];
+      } else {
+        const permission = item as Permission;
+        return [
+          permission.id,
+          permission.name,
+          permission.description,
+          permission.category,
+          permission.rolesCount
+        ];
+      }
+    });
+
+    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeTab}_export.csv`;
+    a.click();
+    toast.success(`${activeTab} exported successfully`);
+  };
+
+  // Duplicate role functionality
+  const handleDuplicateRole = async (role: Role) => {
+    try {
+      await createRoleMutation.mutateAsync({
+        name: `${role.name} (Copy)`,
+        description: `Copy of ${role.description}`,
+        permissions: role.permissions
+      });
+      toast.success(`Role "${role.name}" duplicated successfully`);
+    } catch (error) {
+      console.error('Duplicate role error:', error);
+      toast.error('Failed to duplicate role');
     }
   };
 
@@ -322,13 +431,22 @@ function RolesPageContent() {
           <h1 className="text-3xl font-semibold tracking-tight text-center md:text-left">Access Management</h1>
           <p className="text-muted-foreground mt-1 text-center md:text-left">Manage roles and permissions for your application</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-foreground text-background hover:bg-foreground/90 px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create {activeTab === 'roles' ? 'Role' : 'Permission'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportToCSV}
+            className="border border-input bg-background hover:bg-muted px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-foreground text-background hover:bg-foreground/90 px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create {activeTab === 'roles' ? 'Role' : 'Permission'}
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -363,7 +481,7 @@ function RolesPageContent() {
             <div>
               <p className="text-sm text-muted-foreground">Total Users</p>
               <p className="text-2xl font-semibold">
-                {Array.isArray(allRoles) ? allRoles.reduce((sum, role) => sum + (role?.userCount || 0), 0) : 0}
+                {dashboardStats?.users.total}
               </p>
             </div>
           </div>
@@ -540,8 +658,21 @@ function RolesPageContent() {
                           <Key className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => handleDuplicateRole(role)}
+                          className="p-2 hover:bg-muted rounded-lg transition-colors text-green-600"
+                          title="Duplicate Role"
+                          disabled={createRoleMutation.isPending}
+                        >
+                          {createRoleMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
                           onClick={() => handleEdit(role)}
                           className="p-2 hover:bg-muted rounded-lg transition-colors"
+                          title="Edit Role"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
@@ -549,6 +680,7 @@ function RolesPageContent() {
                           onClick={() => handleDelete(role.id)}
                           disabled={deleteRoleMutation.isPending}
                           className="p-2 hover:bg-muted rounded-lg transition-colors text-destructive disabled:opacity-50"
+                          title="Delete Role"
                         >
                           {deleteRoleMutation.isPending ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -638,6 +770,7 @@ function RolesPageContent() {
                         <button
                           onClick={() => handleEdit(permission)}
                           className="p-2 hover:bg-muted rounded-lg transition-colors"
+                          title="Edit Permission"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
@@ -645,6 +778,7 @@ function RolesPageContent() {
                           onClick={() => handleDelete(permission.id)}
                           disabled={deletePermissionMutation.isPending}
                           className="p-2 hover:bg-muted rounded-lg transition-colors text-destructive disabled:opacity-50"
+                          title="Delete Permission"
                         >
                           {deletePermissionMutation.isPending ? (
                             <Loader2 className="w-4 h-4 animate-spin" />

@@ -10,6 +10,8 @@ async function main() {
   await prisma.billingLog.deleteMany({});
   await prisma.task.deleteMany({});
   await prisma.message.deleteMany({});
+  await prisma.streak.deleteMany({});
+  await prisma.relapse.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.permission.deleteMany({});
   await prisma.role.deleteMany({});
@@ -1186,6 +1188,136 @@ async function main() {
         timestamp: new Date('2025-01-19T09:15:00Z'),
         color: 'gold',
         userId: 'user_130',
+      },
+    ],
+  });
+
+  // Additional notification data for scheduled notifications
+  await prisma.notification.createMany({
+    data: [
+      {
+        title: 'Günlük Motivasyon',
+        message: 'Bugün harika bir gün! Hedeflerine odaklan ve güçlü kal. 💪',
+        type: 'motivation',
+        targetGroup: 'Tüm Kullanıcılar',
+        scheduledAt: new Date('2025-01-26T09:00:00Z'),
+        status: 'active',
+        frequency: 'daily',
+      },
+      {
+        title: 'Haftalık Özet',
+        message: 'Bu hafta nasıl geçti? İstatistiklerini kontrol et ve gelecek hafta için plan yap!',
+        type: 'dailyReminder',
+        targetGroup: 'Aktif Kullanıcılar',
+        scheduledAt: new Date('2025-01-28T18:00:00Z'),
+        status: 'active',
+        frequency: 'weekly',
+      },
+      {
+        title: 'Premium Hatırlatması',
+        message: 'Premium özelliklerini keşfet! İlk ay %50 indirimli.',
+        type: 'marketing',
+        targetGroup: 'Ücretsiz Kullanıcılar',
+        scheduledAt: new Date('2025-01-27T20:00:00Z'),
+        status: 'paused',
+        frequency: 'once',
+      },
+      {
+        title: 'Streak Kutlaması',
+        message: 'Tebrikler! 30 günlük streak\'ini tamamladın! 🎉',
+        type: 'system',
+        targetGroup: '30 Gün Streak',
+        scheduledAt: new Date('2025-01-26T12:00:00Z'),
+        status: 'active',
+        frequency: 'once',
+      },
+      {
+        title: 'Destek Mesajı',
+        message: 'Zorlandığın anları hatırla - sen bundan daha güçlüsün. Topluluk seninle! 🤝',
+        type: 'motivation',
+        targetGroup: 'Zorlanıyor (Streak < 7)',
+        scheduledAt: new Date('2025-01-26T21:00:00Z'),
+        status: 'active',
+        frequency: 'daily',
+      },
+      {
+        title: 'Aylık Rapor',
+        message: 'Bu ay ne kadar ilerlediğini görmek ister misin? Raporunu kontrol et!',
+        type: 'dailyReminder',
+        targetGroup: 'Premium Kullanıcılar',
+        scheduledAt: new Date('2025-02-01T10:00:00Z'),
+        status: 'active',
+        frequency: 'monthly',
+      },
+    ],
+  });
+
+  // Streak data
+  await prisma.streak.createMany({
+    data: [
+      {
+        userId: 'user_123',
+        startDate: new Date('2023-08-15'),
+        currentDays: 127,
+        bestStreak: 180,
+        isActive: true,
+      },
+      {
+        userId: 'user_129',
+        startDate: new Date('2023-12-10'),
+        currentDays: 45,
+        bestStreak: 67,
+        isActive: true,
+      },
+      {
+        userId: 'user_130',
+        startDate: new Date('2024-01-25'),
+        currentDays: 0,
+        bestStreak: 23,
+        isActive: false,
+        endDate: new Date('2024-01-25'),
+      },
+      {
+        userId: 'user_131',
+        startDate: new Date('2023-06-01'),
+        currentDays: 234,
+        bestStreak: 234,
+        isActive: true,
+      },
+      {
+        userId: 'user_132',
+        startDate: new Date('2024-01-01'),
+        currentDays: 25,
+        bestStreak: 45,
+        isActive: true,
+      },
+      {
+        userId: 'user_133',
+        startDate: new Date('2023-09-15'),
+        currentDays: 132,
+        bestStreak: 156,
+        isActive: true,
+      },
+      {
+        userId: 'user_134',
+        startDate: new Date('2024-01-20'),
+        currentDays: 5,
+        bestStreak: 12,
+        isActive: true,
+      },
+      {
+        userId: 'user_135',
+        startDate: new Date('2023-11-01'),
+        currentDays: 85,
+        bestStreak: 98,
+        isActive: true,
+      },
+      {
+        userId: 'user_136',
+        startDate: new Date('2023-07-10'),
+        currentDays: 198,
+        bestStreak: 267,
+        isActive: true,
       },
     ],
   });

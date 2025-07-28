@@ -22,6 +22,12 @@ export async function GET(request: NextRequest) {
         const status = searchParams.get('status') as any
         const userId = searchParams.get('userId') || undefined
         const search = searchParams.get('search') || undefined
+        const category = searchParams.get('category') || undefined
+        const priority = searchParams.get('priority') as any
+        const isScheduled = searchParams.get('isScheduled') === 'true' ? true : searchParams.get('isScheduled') === 'false' ? false : undefined
+        const dateFrom = searchParams.get('dateFrom') ? new Date(searchParams.get('dateFrom')!) : undefined
+        const dateTo = searchParams.get('dateTo') ? new Date(searchParams.get('dateTo')!) : undefined
+        const tags = searchParams.get('tags')?.split(',').filter(Boolean) || undefined
 
         // Validation
         if (page < 1) {
@@ -56,7 +62,7 @@ export async function GET(request: NextRequest) {
             )
         }
 
-        logRequest('GET', url, { page, limit, type, status, userId, search })
+        logRequest('GET', url, { page, limit, type, status, userId, search, category, priority, isScheduled })
 
         const result = await MessageService.getMessages({
             page,
@@ -64,7 +70,13 @@ export async function GET(request: NextRequest) {
             type,
             status,
             userId,
-            search
+            search,
+            category,
+            priority,
+            isScheduled,
+            dateFrom,
+            dateTo,
+            tags
         })
 
         logResponse('GET', url, true, Date.now() - startTime)
