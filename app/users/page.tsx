@@ -76,6 +76,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Image from "next/image";
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -735,9 +736,6 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center space-x-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                            {user.avatar || user.name?.charAt(0)?.toUpperCase()}
-                          </div>
                           <div>
                             <p className="font-medium">{user.name}</p>
                             {user.isPremium && (

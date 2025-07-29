@@ -96,9 +96,9 @@
 
 - ✅ **GET** - Analytics of Streaks - Service work and tested
 
-### DATA/ACTIVITY (Completed)
+### DATA/ACTIVITY
 
-- ✅ **GET** - Analytics of User Activity - Service not found, need to build and implement
+- ❌ **GET** - Analytics of User Activity - Service not found, need to build and implement
 
 ### NOTIFICATIONS/SCHEDULED
 
@@ -196,17 +196,17 @@
 
 ### ABOUT/PRIVACY
 
-- ❌ **Tüm servisler** - Services not found, need to build and implement
+- ❌ **Tüm servisler** - Services not found, need to build and implement (Public link ile ulaşılabilir olacak)
 
 ### ABOUT/TERMS
 
-- ❌ **Tüm servisler** - Services not found, need to build and implement
+- ❌ **Tüm servisler** - Services not found, need to build and implement (Public link ile ulaşılabilir olacak)
 
 ---
 
 ## 📊 ÖZET
 
 **Toplam Tamamlanan:** 65 servis  
-**Toplam Tamamlanmayan:** 33+ servis
+**Toplam Tamamlanmayan:** 24 servis
 
-**Tamamlanma Oranı:** Yaklaşık %66
+**Tamamlanma Oranı:** Yaklaşık %75

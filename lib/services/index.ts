@@ -22,6 +22,7 @@ export {NotificationTemplateService} from './notification-template.service'
 export {ScheduledNotificationService} from './scheduled-notification.service'
 export {NotificationSendService} from './notification-send.service'
 export {NotificationLogService} from './notification-log.service'
+export { DataActivityService} from './data-activity.service';
 
 // Export types
 export type { CreateUserData, UpdateUserData, UserFilters } from './user.service'

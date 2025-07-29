@@ -329,3 +329,77 @@ export interface RelapseData {
     code?: string
   }
   
+
+// Data activity types 
+
+export interface UserActivity {
+    id: string;
+    username: string;
+    lastSeen: string;
+    sessionDuration: string;
+    device: string;
+    location: string;
+    actions: string[];
+    status: 'online' | 'away' | 'offline';
+  }
+  
+  export interface ActivityStats {
+    onlineUsers: number;
+    dailyActiveUsers: number;
+    averageSessionDuration: string;
+    engagementRate: number;
+    dailyActiveUsersChange: string;
+    sessionDurationChange: string;
+  }
+  
+  export interface DeviceStats {
+    device: string;
+    count: number;
+    percentage: number;
+  }
+  
+  export interface ActivityInsight {
+    type: 'info' | 'success' | 'warning' | 'error';
+    title: string;
+    description: string;
+    color: 'blue' | 'green' | 'yellow' | 'red';
+  }
+  
+  export interface ActivityAnalytics {
+    stats: ActivityStats;
+    deviceStats: DeviceStats[];
+    recentActivities: UserActivity[];
+    insights: ActivityInsight[];
+    totalUsers: number;
+    peakHours: string;
+  }
+  
+  export interface ActivityFilters {
+    timeFilter?: string;
+    deviceFilter?: string;
+    userId?: string;
+    limit?: number;
+    page?: number;
+    dateRange?: {
+      start: Date;
+      end: Date;
+    };
+  }
+  
+  export interface ActivityApiFilters {
+    timeFilter?: string;
+    userId?: string;
+    limit?: number;
+  }
+  
+  export interface ApiResponse<T> {
+    data: T;
+    success: boolean;
+    message?: string;
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }

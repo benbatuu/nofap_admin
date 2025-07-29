@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { usersApi, messagesApi, tasksApi, dashboardApi, rolesApi, permissionsApi, userNotificationsApi, blockedUsersApi, blockedIpsApi, relapseApi, streakApi, scheduledNotificationApi, notificationSendApi, notificationTemplateApi, notificationLogApi, productApi } from '@/lib/api'
+import { usersApi, messagesApi, tasksApi, dashboardApi, rolesApi, permissionsApi, userNotificationsApi, blockedUsersApi, blockedIpsApi, relapseApi, streakApi, scheduledNotificationApi, notificationSendApi, notificationTemplateApi, notificationLogApi, productApi, dataActivityApi } from '@/lib/api'
 import type {
     DashboardStats,
     Activity,
@@ -1111,3 +1111,19 @@ export function useFetchRelapses(filters: RelapseFilters = {}) {
       },
     })
   }
+
+  // DATA ACTIVITY
+  export function useDataActivity(filters?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    userId?: string;
+    dateRange?: { start: Date; end: Date };
+  }) {
+    return useQuery({
+        queryKey: ['dataActivity', filters],
+        queryFn: () => dataActivityApi.getActivityAnalytics(filters),
+        staleTime: 30000, // 30 saniye
+        retry: 2,
+    })
+}

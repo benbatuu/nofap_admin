@@ -803,6 +803,24 @@ export const productApi = {
     }
 }
 
+export const dataActivityApi = {
+
+    getActivityAnalytics: (filters?: {
+        timeFilter?: string;
+        userId?: string;
+        limit?: number;
+    }) => {
+        const searchParams = new URLSearchParams()
+        if (filters?.timeFilter && filters.timeFilter !== 'all') {
+            searchParams.set('timeFilter', filters.timeFilter)
+        }
+        if (filters?.userId) searchParams.set('userId', filters.userId)
+        if (filters?.limit) searchParams.set('limit', filters.limit.toString())
+        const queryString = searchParams.toString()
+        return apiRequest<any>(`/data/activity/analytics${queryString ? `?${queryString}` : ''}`)  
+    }
+}
+
 export const apiEndpoints = {
     users: '/users',
     messages: '/messages',
@@ -820,4 +838,5 @@ export const apiEndpoints = {
     notificationTemplates: '/notifications/templates',
     notificationLogs: '/notifications/logs',
     products: '/billing/products',
+    dataActivity: '/data/activity',
 } as const

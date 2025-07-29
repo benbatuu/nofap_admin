@@ -182,10 +182,12 @@ export class ActivityAnalyticsService extends BaseService<Activity, any, any, Ac
 
         // Group activities by user and calculate basic metrics
         const userSessions = activities.reduce((acc, activity) => {
-            if (!acc[activity.userId]) {
+            if (activity.userId && !acc[activity.userId]) {
                 acc[activity.userId] = [];
             }
-            acc[activity.userId].push(activity.timestamp);
+            if (activity.userId) {
+                acc[activity.userId].push(activity.timestamp);
+            }
             return acc;
         }, {} as Record<string, Date[]>);
 
@@ -275,7 +277,7 @@ export class ActivityAnalyticsService extends BaseService<Activity, any, any, Ac
                 const returnedUsers = await prisma.activity.findMany({
                     where: {
                         userId: {
-                            in: initialUsers.map(u => u.userId)
+                            in: initialUsers.map(u => u.userId).filter((userId): userId is string => userId !== null)
                         },
                         timestamp: { gte: startDate }
                     },
