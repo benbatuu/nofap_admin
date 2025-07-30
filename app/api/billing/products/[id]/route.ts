@@ -11,17 +11,19 @@ function logResponse(method: string, url: string, success: boolean, duration: nu
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     const startTime = Date.now()
     const url = request.url
 
     try {
-        logRequest('GET', url, { id: params.id })
+        const { id } = await params
+        logRequest('GET', url, { id })
 
-        const result = await ProductService.getProductById(params.id)
+        const product = await ProductService.getProductById(id)
 
-        if (!result) {
+        if (!product) {
+            logResponse('GET', url, false, Date.now() - startTime)
             return NextResponse.json(
                 { success: false, error: 'Product not found' },
                 { status: 404 }
@@ -32,7 +34,7 @@ export async function GET(
 
         return NextResponse.json({
             success: true,
-            data: result
+            data: product
         })
     } catch (error) {
         logResponse('GET', url, false, Date.now() - startTime)
@@ -46,22 +48,23 @@ export async function GET(
 
 export async function PUT(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     const startTime = Date.now()
     const url = request.url
 
     try {
+        const { id } = await params
         const body = await request.json()
-        logRequest('PUT', url, { id: params.id, body })
+        logRequest('PUT', url, { id, ...body })
 
-        const result = await ProductService.updateProduct(params.id, body)
+        const product = await ProductService.updateProduct(id, body)
 
         logResponse('PUT', url, true, Date.now() - startTime)
 
         return NextResponse.json({
             success: true,
-            data: result
+            data: product
         })
     } catch (error) {
         logResponse('PUT', url, false, Date.now() - startTime)
@@ -75,15 +78,16 @@ export async function PUT(
 
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     const startTime = Date.now()
     const url = request.url
 
     try {
-        logRequest('DELETE', url, { id: params.id })
+        const { id } = await params
+        logRequest('DELETE', url, { id })
 
-        await ProductService.deleteProduct(params.id)
+        await ProductService.deleteProduct(id)
 
         logResponse('DELETE', url, true, Date.now() - startTime)
 
@@ -99,4 +103,4 @@ export async function DELETE(
             { status: 500 }
         )
     }
-} 
+}

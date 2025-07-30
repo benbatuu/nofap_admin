@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
 import { useState } from "react"
@@ -7,16 +8,36 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { DollarSign, Package, Plus, Edit, Trash2, Crown, Star, RefreshCw, AlertCircle } from "lucide-react"
+import { DollarSign, Package, Plus, Edit, Trash2, Crown, Star, RefreshCw } from "lucide-react"
 import { useProducts, useProductAnalytics, useProductSuggestions, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/use-api"
 import { toast } from "sonner"
+import type { Product } from "@/types/api"
+
+interface NewProductForm {
+  name: string
+  description: string
+  price: string
+  interval: "monthly" | "yearly"
+  features: string
+}
 
 export default function ProductsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<any>(null)
-  const [newProduct, setNewProduct] = useState({
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null)
+  const [newProduct, setNewProduct] = useState<NewProductForm>({
+    name: "",
+    description: "",
+    price: "",
+    interval: "monthly",
+    features: ""
+  })
+  const [editForm, setEditForm] = useState<NewProductForm>({
     name: "",
     description: "",
     price: "",
@@ -25,20 +46,20 @@ export default function ProductsPage() {
   })
 
   // API Hooks
-  const { 
-    data: productsData, 
+  const {
+    data: productsData,
     isLoading: isProductsLoading,
-    refetch: refetchProducts 
+    refetch: refetchProducts
   } = useProducts({ limit: 50 })
 
-  const { 
-    data: analytics, 
-    isLoading: isAnalyticsLoading 
+  const {
+    data: analytics,
+    isLoading: isAnalyticsLoading
   } = useProductAnalytics()
 
-  const { 
-    data: suggestions, 
-    isLoading: isSuggestionsLoading 
+  const {
+    data: suggestions,
+    isLoading: isSuggestionsLoading
   } = useProductSuggestions()
 
   const createProductMutation = useCreateProduct()
@@ -54,41 +75,90 @@ export default function ProductsPage() {
         name: newProduct.name,
         description: newProduct.description,
         price: parseFloat(newProduct.price),
+        type: 'subscription',
+        currency: 'USD',
         interval: newProduct.interval,
-        features,
-        currency: 'USD'
+        features: features
       })
-      
+
       toast.success('Ürün başarıyla oluşturuldu')
       setIsCreateDialogOpen(false)
       setNewProduct({ name: "", description: "", price: "", interval: "monthly", features: "" })
+      refetchProducts()
     } catch (error) {
+      console.error('Product creation error:', error)
       toast.error('Ürün oluşturulurken hata oluştu')
     }
   }
 
-  const handleUpdateProduct = async (id: string, data: any) => {
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product)
+    setEditForm({
+      name: product.name,
+      description: product.description,
+      price: product.price.toString(),
+      interval: product.interval,
+      features: product.features.join('\n')
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleUpdateProduct = async () => {
+    if (!editingProduct) return
+
     try {
-      await updateProductMutation.mutateAsync({ id, data })
+      const features = editForm.features.split('\n').filter(f => f.trim())
+
+      // Set duration based on interval
+      let duration = null;
+      if (editForm.interval === 'monthly') {
+        duration = '1 month';
+      } else if (editForm.interval === 'yearly') {
+        duration = '1 year';
+      }
+
+      await updateProductMutation.mutateAsync({
+        id: editingProduct.id,
+        data: {
+          name: editForm.name,
+          description: editForm.description,
+          price: parseFloat(editForm.price),
+          duration: duration,
+          features: features
+        }
+      })
+
       toast.success('Ürün başarıyla güncellendi')
+      setIsEditDialogOpen(false)
       setEditingProduct(null)
+      refetchProducts()
     } catch (error) {
+      console.error('Product update error:', error)
       toast.error('Ürün güncellenirken hata oluştu')
     }
   }
 
-  const handleDeleteProduct = async (id: string) => {
-    if (confirm('Bu ürünü silmek istediğinizden emin misiniz?')) {
-      try {
-        await deleteProductMutation.mutateAsync(id)
-        toast.success('Ürün başarıyla silindi')
-      } catch (error) {
-        toast.error('Ürün silinirken hata oluştu')
-      }
+  const handleDeleteProduct = async () => {
+    if (!deletingProduct) return
+
+    try {
+      await deleteProductMutation.mutateAsync(deletingProduct.id)
+      toast.success('Ürün başarıyla silindi')
+      setIsDeleteDialogOpen(false)
+      setDeletingProduct(null)
+      refetchProducts()
+    } catch (error) {
+      console.error('Product delete error:', error)
+      toast.error('Ürün silinirken hata oluştu')
     }
   }
 
-  const handleToggleActive = async (product: any) => {
+  const openDeleteDialog = (product: Product) => {
+    setDeletingProduct(product)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleToggleActive = async (product: Product) => {
     try {
       await updateProductMutation.mutateAsync({
         id: product.id,
@@ -96,6 +166,7 @@ export default function ProductsPage() {
       })
       toast.success('Ürün durumu güncellendi')
     } catch (error) {
+      console.error('Product toggle error:', error)
       toast.error('Ürün durumu güncellenirken hata oluştu')
     }
   }
@@ -124,29 +195,54 @@ export default function ProductsPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <Input
-                placeholder="Ürün adı"
-                value={newProduct.name}
-                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-              />
-              <Textarea
-                placeholder="Ürün açıklaması"
-                value={newProduct.description}
-                onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-              />
-              <Input
-                placeholder="Fiyat (USD)"
-                type="number"
-                value={newProduct.price}
-                onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-              />
-              <Textarea
-                placeholder="Özellikler (her satıra bir özellik)"
-                value={newProduct.features}
-                onChange={(e) => setNewProduct({ ...newProduct, features: e.target.value })}
-              />
-              <Button 
-                className="w-full" 
+              <div>
+                <label className="text-sm font-medium">Ürün Adı</label>
+                <Input
+                  placeholder="Ürün adı"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Açıklama</label>
+                <Textarea
+                  placeholder="Ürün açıklaması"
+                  value={newProduct.description}
+                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Fiyat (USD)</label>
+                <Input
+                  placeholder="29.99"
+                  type="number"
+                  step="0.01"
+                  value={newProduct.price}
+                  onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Periyot</label>
+                <select
+                  className="w-full p-2 border rounded-md"
+                  value={newProduct.interval}
+                  onChange={(e) => setNewProduct({ ...newProduct, interval: e.target.value as "monthly" | "yearly" })}
+                >
+                  <option value="monthly">Aylık</option>
+                  <option value="yearly">Yıllık</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Özellikler</label>
+                <Textarea
+                  placeholder="Her satıra bir özellik yazın&#10;Sınırsız erişim&#10;Premium destek&#10;Gelişmiş analitik"
+                  value={newProduct.features}
+                  onChange={(e) => setNewProduct({ ...newProduct, features: e.target.value })}
+                  rows={4}
+                />
+              </div>
+              <Button
+                className="w-full"
                 onClick={handleCreateProduct}
                 disabled={createProductMutation.isPending || !newProduct.name || !newProduct.description || !newProduct.price}
               >
@@ -326,34 +422,34 @@ export default function ProductsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                products.map((product: any) => (
-                <TableRow key={product.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{product.name}</div>
-                      <div className="text-sm text-muted-foreground">{product.description}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">
-                      ${product.price} {product.currency}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {product.interval === "monthly" ? "Aylık" : "Yıllık"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Crown className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
-                      <span>{product.subscribers.toLocaleString()}</span>
-                    </div>
-                  </TableCell>
-                                      <TableCell>
+                products.map((product: Product) => (
+                  <TableRow key={product.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{product.name}</div>
+                        <div className="text-sm text-muted-foreground">{product.description}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">
+                        ${product.price} {product.currency}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {product.interval === "monthly" ? "Aylık" : "Yıllık"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center space-x-2">
-                        <Switch 
-                          checked={product.isActive} 
+                        <Crown className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
+                        <span>{product.subscribers.toLocaleString()}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={product.isActive}
                           onCheckedChange={() => handleToggleActive(product)}
                           disabled={updateProductMutation.isPending}
                         />
@@ -362,43 +458,42 @@ export default function ProductsPage() {
                         </Badge>
                       </div>
                     </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {product.features?.slice(0, 2).map((feature: any, index: any) => (
-                        <div key={index} className="text-xs text-muted-foreground">
-                          • {feature}
-                        </div>
-                      ))}
-                      {product.features?.length > 2 && (
-                        <div className="text-xs text-muted-foreground">
-                          +{product.features.length - 2} daha...
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setEditingProduct(product)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-red-600 dark:text-red-400"
-                        onClick={() => handleDeleteProduct(product.id)}
-                        disabled={deleteProductMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+                    <TableCell>
+                      <div className="space-y-1">
+                        {product.features?.slice(0, 2).map((feature: string, index: number) => (
+                          <div key={index} className="text-xs text-muted-foreground">
+                            • {feature}
+                          </div>
+                        ))}
+                        {product.features?.length > 2 && (
+                          <div className="text-xs text-muted-foreground">
+                            +{product.features.length - 2} daha...
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditProduct(product)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 dark:text-red-400"
+                          onClick={() => openDeleteDialog(product)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -415,7 +510,7 @@ export default function ProductsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {products.filter((p: any) => p.isActive).map((product: any) => (
+              {products.filter((p: Product) => p.isActive).map((product: Product) => (
                 <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
                     <div className="font-medium">{product.name}</div>
@@ -456,7 +551,7 @@ export default function ProductsPage() {
               </div>
             ) : suggestions?.marketingSuggestions ? (
               <div className="space-y-3">
-                {suggestions.marketingSuggestions.map((suggestion: any, index: any) => (
+                {suggestions.marketingSuggestions.map((suggestion: any, index: number) => (
                   <div key={index} className="p-3 border rounded-lg bg-green-50 dark:bg-green-950/20">
                     <h4 className="font-medium text-green-800 dark:text-green-200">{suggestion.strategy}</h4>
                     <p className="text-sm text-green-700 dark:text-green-300 mt-1">
@@ -478,6 +573,121 @@ export default function ProductsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ürün Düzenle</DialogTitle>
+            <DialogDescription>
+              Ürün bilgilerini güncelleyin
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Ürün Adı</label>
+              <Input
+                placeholder="Ürün adı"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Açıklama</label>
+              <Textarea
+                placeholder="Ürün açıklaması"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Fiyat (USD)</label>
+              <Input
+                placeholder="29.99"
+                type="number"
+                step="0.01"
+                value={editForm.price}
+                onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Periyot</label>
+              <Select value={editForm.interval} onValueChange={(value: "monthly" | "yearly") => setEditForm({ ...editForm, interval: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">Aylık</SelectItem>
+                  <SelectItem value="yearly">Yıllık</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Özellikler</label>
+              <Textarea
+                placeholder="Her satıra bir özellik yazın"
+                value={editForm.features}
+                onChange={(e) => setEditForm({ ...editForm, features: e.target.value })}
+                rows={4}
+              />
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                İptal
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleUpdateProduct}
+                disabled={updateProductMutation.isPending || !editForm.name || !editForm.description || !editForm.price}
+              >
+                {updateProductMutation.isPending ? "Güncelleniyor..." : "Güncelle"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Product Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ürünü Sil</DialogTitle>
+            <DialogDescription>
+              Bu işlem geri alınamaz. Ürün kalıcı olarak silinecektir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {deletingProduct && (
+              <div className="p-4 bg-muted rounded-lg">
+                <div className="font-medium">{deletingProduct.name}</div>
+                <div className="text-sm text-muted-foreground">{deletingProduct.description}</div>
+                <div className="text-sm font-medium mt-2">${deletingProduct.price} {deletingProduct.currency}</div>
+              </div>
+            )}
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsDeleteDialogOpen(false)}
+              >
+                İptal
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={handleDeleteProduct}
+                disabled={deleteProductMutation.isPending}
+              >
+                {deleteProductMutation.isPending ? "Siliniyor..." : "Sil"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

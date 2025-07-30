@@ -1,35 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ProductService } from '@/lib/services'
 
-function logRequest(method: string, url: string, params?: any) {
-    console.log(`[${new Date().toISOString()}] ${method} ${url}`, params ? { params } : '')
-}
-
-function logResponse(method: string, url: string, success: boolean, duration: number) {
-    console.log(`[${new Date().toISOString()}] ${method} ${url} - ${success ? 'SUCCESS' : 'ERROR'} (${duration}ms)`)
-}
-
 export async function GET(request: NextRequest) {
-    const startTime = Date.now()
-    const url = request.url
-
     try {
-        logRequest('GET', url)
-
-        const result = await ProductService.getProductSuggestions()
-
-        logResponse('GET', url, true, Date.now() - startTime)
+        const suggestions = await ProductService.getProductSuggestions()
 
         return NextResponse.json({
             success: true,
-            data: result
+            data: suggestions
         })
     } catch (error) {
-        logResponse('GET', url, false, Date.now() - startTime)
-        console.error('Product Suggestions API error:', error)
+        console.error('Error generating product suggestions:', error)
         return NextResponse.json(
-            { success: false, error: 'Failed to fetch product suggestions' },
+            { success: false, error: 'Ürün önerileri oluşturulurken hata oluştu' },
             { status: 500 }
         )
     }
-} 
+}

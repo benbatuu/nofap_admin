@@ -4,8 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Activity, Users, Clock, TrendingUp, Smartphone, Monitor, Loader2 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Activity, Users, Clock, TrendingUp, Smartphone, Monitor, Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
 import { ActivityService } from "@/lib/services/data-activity.service"
 import { useDataActivity } from "@/hooks/use-api"
 import { ActivityAnalytics, ActivityFilters } from "@/types/api"
@@ -14,6 +16,9 @@ export default function ActivityPage() {
   const [timeFilter, setTimeFilter] = useState("24h")
   const [deviceFilter, setDeviceFilter] = useState("all")
   const [activityData, setActivityData] = useState<ActivityAnalytics | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   // API hook kullanımı
   const filters: ActivityFilters = {
@@ -21,11 +26,11 @@ export default function ActivityPage() {
     limit: 50
   }
 
-  const { 
-    data: apiData, 
-    isLoading, 
-    error, 
-    refetch 
+  const {
+    data: apiData,
+    isLoading,
+    error,
+    refetch
   } = useDataActivity(filters)
 
   // Local state güncellemesi
@@ -44,13 +49,38 @@ export default function ActivityPage() {
     setDeviceFilter(value)
   }
 
-  // Filtrelenmiş aktiviteler
-  const filteredActivities = activityData?.recentActivities 
-    ? ActivityService.filterByDevice(
-        ActivityService.filterByTimeRange(activityData.recentActivities, timeFilter),
-        deviceFilter
+  // Filtrelenmiş ve aranmış aktiviteler
+  const filteredAndSearchedActivities = useMemo(() => {
+    if (!activityData?.recentActivities) return []
+
+    let filtered = ActivityService.filterByDevice(activityData.recentActivities, deviceFilter)
+
+    // Arama filtresi uygula
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(activity =>
+        activity.username.toLowerCase().includes(query) ||
+        activity.device.toLowerCase().includes(query) ||
+        activity.location.toLowerCase().includes(query) ||
+        activity.status.toLowerCase().includes(query) ||
+        activity.actions.some(action => action.toLowerCase().includes(query))
       )
-    : []
+    }
+
+    return filtered
+  }, [activityData?.recentActivities, deviceFilter, searchQuery])
+
+  // Pagination hesaplamaları
+  const totalItems = filteredAndSearchedActivities.length
+  const totalPages = Math.ceil(totalItems / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentActivities = filteredAndSearchedActivities.slice(startIndex, endIndex)
+
+  // Sayfa değiştiğinde en üste scroll
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, deviceFilter, timeFilter])
 
   // Loading state
   if (isLoading) {
@@ -71,8 +101,8 @@ export default function ActivityPage() {
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <p className="text-red-500 mb-4">Aktivite verileri yüklenirken hata oluştu</p>
-            <button 
-              onClick={() => refetch()} 
+            <button
+              onClick={() => refetch()}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             >
               Tekrar Dene
@@ -194,7 +224,17 @@ export default function ActivityPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center space-x-2 mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 mb-4">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Kullanıcı, cihaz, konum veya eylem ara..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
                 <Select value={timeFilter} onValueChange={handleTimeFilterChange}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Zaman filtresi" />
@@ -220,6 +260,16 @@ export default function ActivityPage() {
                 </Select>
               </div>
 
+              {/* Sonuç sayısı */}
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-muted-foreground">
+                  {totalItems} sonuçtan {startIndex + 1}-{Math.min(endIndex, totalItems)} arası gösteriliyor
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Sayfa {currentPage} / {totalPages}
+                </p>
+              </div>
+
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -233,7 +283,7 @@ export default function ActivityPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredActivities?.map((activity) => (
+                  {currentActivities?.map((activity) => (
                     <TableRow key={activity.id}>
                       <TableCell className="font-medium">{activity.username}</TableCell>
                       <TableCell>{activity.lastSeen}</TableCell>
@@ -274,11 +324,98 @@ export default function ActivityPage() {
                 </TableBody>
               </Table>
 
-              {filteredActivities.length === 0 && (
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Önceki
+                    </Button>
+
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className="w-8 h-8 p-0"
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Sonraki
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onValueChange={(value) => {
+                      const newItemsPerPage = parseInt(value)
+                      setItemsPerPage(newItemsPerPage)
+                      const newTotalPages = Math.ceil(totalItems / newItemsPerPage)
+                      setCurrentPage(prev => Math.min(prev, newTotalPages))
+                    }}
+                  >
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5 / sayfa</SelectItem>
+                      <SelectItem value="10">10 / sayfa</SelectItem>
+                      <SelectItem value="20">20 / sayfa</SelectItem>
+                      <SelectItem value="50">50 / sayfa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {filteredAndSearchedActivities.length === 0 && (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground">
-                    Seçilen filtrelerle eşleşen aktivite bulunamadı
+                    {searchQuery ?
+                      `"${searchQuery}" araması için sonuç bulunamadı` :
+                      "Seçilen filtrelerle eşleşen aktivite bulunamadı"
+                    }
                   </p>
+                  {searchQuery && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSearchQuery("")}
+                      className="mt-2"
+                    >
+                      Aramayı Temizle
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -295,29 +432,26 @@ export default function ActivityPage() {
             <CardContent>
               <div className="space-y-3">
                 {activityData.insights?.map((insight, index) => (
-                  <div 
-                    key={index} 
-                    className={`p-4 border rounded-lg ${
-                      insight.color === 'blue' ? 'bg-blue-50 dark:bg-blue-950/20' :
+                  <div
+                    key={index}
+                    className={`p-4 border rounded-lg ${insight.color === 'blue' ? 'bg-blue-50 dark:bg-blue-950/20' :
                       insight.color === 'green' ? 'bg-green-50 dark:bg-green-950/20' :
-                      insight.color === 'yellow' ? 'bg-yellow-50 dark:bg-yellow-950/20' :
-                      'bg-red-50 dark:bg-red-950/20'
-                    }`}
+                        insight.color === 'yellow' ? 'bg-yellow-50 dark:bg-yellow-950/20' :
+                          'bg-red-50 dark:bg-red-950/20'
+                      }`}
                   >
-                    <h4 className={`font-medium ${
-                      insight.color === 'blue' ? 'text-blue-800 dark:text-blue-200' :
+                    <h4 className={`font-medium ${insight.color === 'blue' ? 'text-blue-800 dark:text-blue-200' :
                       insight.color === 'green' ? 'text-green-800 dark:text-green-200' :
-                      insight.color === 'yellow' ? 'text-yellow-800 dark:text-yellow-200' :
-                      'text-red-800 dark:text-red-200'
-                    }`}>
+                        insight.color === 'yellow' ? 'text-yellow-800 dark:text-yellow-200' :
+                          'text-red-800 dark:text-red-200'
+                      }`}>
                       {insight.title}
                     </h4>
-                    <p className={`text-sm mt-1 ${
-                      insight.color === 'blue' ? 'text-blue-700 dark:text-blue-300' :
+                    <p className={`text-sm mt-1 ${insight.color === 'blue' ? 'text-blue-700 dark:text-blue-300' :
                       insight.color === 'green' ? 'text-green-700 dark:text-green-300' :
-                      insight.color === 'yellow' ? 'text-yellow-700 dark:text-yellow-300' :
-                      'text-red-700 dark:text-red-300'
-                    }`}>
+                        insight.color === 'yellow' ? 'text-yellow-700 dark:text-yellow-300' :
+                          'text-red-700 dark:text-red-300'
+                      }`}>
                       {insight.description}
                     </p>
                   </div>

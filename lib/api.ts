@@ -1,26 +1,26 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // API client utilities
-import type { 
-    DashboardStats, 
-    Activity, 
-    SystemStatus, 
-    MonthlyStats, 
-    UsersResponse, 
-    Role, 
-    Permission, 
-    CreateRoleData, 
-    CreatePermissionData, 
-    UserNotification, 
-    UpdateUserNotificationData, 
-    BulkUpdateNotificationData, 
-    BlockedUsersResponse, 
-    BlockedUser, 
-    CreateBlockedUserData, 
-    UpdateBlockedUserData, 
-    StatisticData, 
-    BlockedIPsResponse, 
-    BlockedIP, 
-    CreateBlockedIPData, 
+import type {
+    DashboardStats,
+    Activity,
+    SystemStatus,
+    MonthlyStats,
+    UsersResponse,
+    Role,
+    Permission,
+    CreateRoleData,
+    CreatePermissionData,
+    UserNotification,
+    UpdateUserNotificationData,
+    BulkUpdateNotificationData,
+    BlockedUsersResponse,
+    BlockedUser,
+    CreateBlockedUserData,
+    UpdateBlockedUserData,
+    StatisticData,
+    BlockedIPsResponse,
+    BlockedIP,
+    CreateBlockedIPData,
     UpdateBlockedIPData,
     RelapseStats,
     RelapseFilters,
@@ -167,7 +167,7 @@ export const messagesApi = {
     getAnalytics: (params?: { days?: number }) => {
         const searchParams = new URLSearchParams()
         if (params?.days) searchParams.set('days', params.days.toString())
-        
+
         return apiRequest(`/messages/analytics?${searchParams.toString()}`)
     },
 
@@ -468,74 +468,74 @@ export const relapseApi = {
     getRelapses: (filters?: RelapseFilters): Promise<RelapseResponse> => {
         const searchParams = new URLSearchParams()
         if (filters?.timeFilter && filters.timeFilter !== 'all') {
-          searchParams.set('timeFilter', filters.timeFilter)
+            searchParams.set('timeFilter', filters.timeFilter)
         }
         if (filters?.severityFilter && filters.severityFilter !== 'all') {
-          searchParams.set('severityFilter', filters.severityFilter)
+            searchParams.set('severityFilter', filters.severityFilter)
         }
         if (filters?.page) searchParams.set('page', filters.page.toString())
         if (filters?.limit) searchParams.set('limit', filters.limit.toString())
         if (filters?.userId) searchParams.set('userId', filters.userId)
-    
+
         const queryString = searchParams.toString()
         return apiRequest<RelapseResponse>(`/relapse${queryString ? `?${queryString}` : ''}`)
-      },
-    
-      getRelapseById: (id: string): Promise<RelapseData> => {
+    },
+
+    getRelapseById: (id: string): Promise<RelapseData> => {
         return apiRequest<RelapseData>(`/relapse/${id}`)
-      },
-    
-      createRelapse: (data: RelapseData): Promise<RelapseData> => {
+    },
+
+    createRelapse: (data: RelapseData): Promise<RelapseData> => {
         return apiRequest<RelapseData>('/relapse', {
-          method: 'POST',
-          body: JSON.stringify(data),
+            method: 'POST',
+            body: JSON.stringify(data),
         })
-      },
-    
-      updateRelapse: (id: string, data: Partial<RelapseData>): Promise<RelapseData> => {
+    },
+
+    updateRelapse: (id: string, data: Partial<RelapseData>): Promise<RelapseData> => {
         return apiRequest<RelapseData>(`/relapse/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify(data),
+            method: 'PUT',
+            body: JSON.stringify(data),
         })
-      },
-    
-      deleteRelapse: (id: string): Promise<void> => {
+    },
+
+    deleteRelapse: (id: string): Promise<void> => {
         return apiRequest<void>(`/relapse/${id}`, {
-          method: 'DELETE',
+            method: 'DELETE',
         })
-      },
-    
-      getRelapseStats: (filters?: RelapseFilters): Promise<RelapseStats> => {
+    },
+
+    getRelapseStats: (filters?: RelapseFilters): Promise<RelapseStats> => {
         const searchParams = new URLSearchParams()
         if (filters?.timeFilter && filters.timeFilter !== 'all') {
-          searchParams.set('timeFilter', filters.timeFilter)
+            searchParams.set('timeFilter', filters.timeFilter)
         }
         if (filters?.severityFilter && filters.severityFilter !== 'all') {
-          searchParams.set('severityFilter', filters.severityFilter)
+            searchParams.set('severityFilter', filters.severityFilter)
         }
         if (filters?.userId) {
-          searchParams.set('userId', filters.userId)
+            searchParams.set('userId', filters.userId)
         }
-    
+
         const queryString = searchParams.toString()
         return apiRequest<RelapseStats>(`/relapse/stats${queryString ? `?${queryString}` : ''}`)
-      },
+    },
 
-      getRelapseAnalytics: (filters?: RelapseFilters): Promise<any> => {
+    getRelapseAnalytics: (filters?: RelapseFilters): Promise<any> => {
         const searchParams = new URLSearchParams()
         if (filters?.timeFilter && filters.timeFilter !== 'all') {
-          searchParams.set('timeFilter', filters.timeFilter)
+            searchParams.set('timeFilter', filters.timeFilter)
         }
         if (filters?.severityFilter && filters.severityFilter !== 'all') {
-          searchParams.set('severityFilter', filters.severityFilter)
+            searchParams.set('severityFilter', filters.severityFilter)
         }
         if (filters?.userId) {
-          searchParams.set('userId', filters.userId)
+            searchParams.set('userId', filters.userId)
         }
-    
+
         const queryString = searchParams.toString()
         return apiRequest<any>(`/relapse/analytics${queryString ? `?${queryString}` : ''}`)
-      },
+    },
 }
 
 // Generic API hooks for React Query/SWR
@@ -803,6 +803,62 @@ export const productApi = {
     }
 }
 
+export const subscriptionApi = {
+    getSubscriptions: (filters?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        status?: string;
+        userId?: string;
+    }) => {
+        const searchParams = new URLSearchParams()
+        if (filters?.page) searchParams.set('page', filters.page.toString())
+        if (filters?.limit) searchParams.set('limit', filters.limit.toString())
+        if (filters?.search) searchParams.set('search', filters.search)
+        if (filters?.status && filters.status !== 'all') searchParams.set('status', filters.status)
+        if (filters?.userId) searchParams.set('userId', filters.userId)
+
+        const queryString = searchParams.toString()
+        return apiRequest<any>(`/billing/subscriptions${queryString ? `?${queryString}` : ''}`)
+    },
+
+    getSubscriptionById: (id: string) => {
+        return apiRequest<any>(`/billing/subscriptions/${id}`)
+    },
+
+    createSubscription: (data: any) => {
+        return apiRequest<any>('/billing/subscriptions', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        })
+    },
+
+    updateSubscription: (id: string, data: any) => {
+        return apiRequest<any>(`/billing/subscriptions/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        })
+    },
+
+    cancelSubscription: (id: string) => {
+        return apiRequest<any>(`/billing/subscriptions/${id}/cancel`, {
+            method: 'PUT',
+        })
+    },
+
+    getSubscriptionAnalytics: (filters?: {
+        timeFilter?: string;
+    }) => {
+        const searchParams = new URLSearchParams()
+        if (filters?.timeFilter && filters.timeFilter !== 'all') {
+            searchParams.set('timeFilter', filters.timeFilter)
+        }
+
+        const queryString = searchParams.toString()
+        return apiRequest<any>(`/billing/subscriptions/analytics${queryString ? `?${queryString}` : ''}`)
+    }
+}
+
 export const dataActivityApi = {
 
     getActivityAnalytics: (filters?: {
@@ -817,7 +873,7 @@ export const dataActivityApi = {
         if (filters?.userId) searchParams.set('userId', filters.userId)
         if (filters?.limit) searchParams.set('limit', filters.limit.toString())
         const queryString = searchParams.toString()
-        return apiRequest<any>(`/data/activity/analytics${queryString ? `?${queryString}` : ''}`)  
+        return apiRequest<any>(`/data/activity/analytics${queryString ? `?${queryString}` : ''}`)
     }
 }
 
@@ -838,5 +894,6 @@ export const apiEndpoints = {
     notificationTemplates: '/notifications/templates',
     notificationLogs: '/notifications/logs',
     products: '/billing/products',
+    subscriptions: '/billing/subscriptions',
     dataActivity: '/data/activity',
 } as const

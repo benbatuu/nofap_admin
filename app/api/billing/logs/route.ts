@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AdService } from '@/lib/services/ad.service'
-import { AdType, AdStatus } from '@/lib/generated/prisma'
+import { BillingService } from '@/lib/services'
+import { BillingStatus } from '@/lib/generated/prisma'
 
 function logRequest(method: string, url: string, params?: any) {
     console.log(`[${new Date().toISOString()}] ${method} ${url}`, params ? { params } : '')
@@ -18,20 +18,24 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url)
         const page = parseInt(searchParams.get('page') || '1')
         const limit = parseInt(searchParams.get('limit') || '10')
-        const status = searchParams.get('status') as AdStatus | null
-        const type = searchParams.get('type') as AdType | null
-        const placement = searchParams.get('placement') || undefined
+        const status = searchParams.get('status') as BillingStatus | null
+        const userId = searchParams.get('userId') || undefined
+        const paymentMethod = searchParams.get('paymentMethod') || undefined
         const search = searchParams.get('search') || undefined
+        const dateFrom = searchParams.get('dateFrom') ? new Date(searchParams.get('dateFrom')!) : undefined
+        const dateTo = searchParams.get('dateTo') ? new Date(searchParams.get('dateTo')!) : undefined
 
-        logRequest('GET', url, { page, limit, status, type, placement, search })
+        logRequest('GET', url, { page, limit, status, userId, paymentMethod, search, dateFrom, dateTo })
 
-        const result = await AdService.getAds({
+        const result = await BillingService.getBillingLogs({
             page,
             limit,
             status: status || undefined,
-            type: type || undefined,
-            placement,
-            search
+            userId,
+            paymentMethod,
+            search,
+            dateFrom,
+            dateTo
         })
 
         logResponse('GET', url, true, Date.now() - startTime)
@@ -42,9 +46,9 @@ export async function GET(request: NextRequest) {
         })
     } catch (error) {
         logResponse('GET', url, false, Date.now() - startTime)
-        console.error('Ads API error:', error)
+        console.error('Billing Logs API error:', error)
         return NextResponse.json(
-            { success: false, error: 'Failed to fetch ads' },
+            { success: false, error: 'Failed to fetch billing logs' },
             { status: 500 }
         )
     }
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
         logRequest('POST', url, body)
 
         // Validate data
-        const errors = AdService.validateAdData(body)
+        const errors = BillingService.validateBillingData(body)
         if (errors.length > 0) {
             return NextResponse.json(
                 { success: false, error: 'Validation failed', details: errors },
@@ -67,7 +71,7 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        const result = await AdService.createAd(body)
+        const result = await BillingService.createBillingLog(body)
 
         logResponse('POST', url, true, Date.now() - startTime)
 
@@ -77,9 +81,9 @@ export async function POST(request: NextRequest) {
         })
     } catch (error) {
         logResponse('POST', url, false, Date.now() - startTime)
-        console.error('Create Ad API error:', error)
+        console.error('Create Billing Log API error:', error)
         return NextResponse.json(
-            { success: false, error: 'Failed to create ad' },
+            { success: false, error: 'Failed to create billing log' },
             { status: 500 }
         )
     }

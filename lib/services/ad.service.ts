@@ -8,7 +8,7 @@ export interface CreateAdData {
   targetUrl: string
   type: AdType
   placement: string
-  targeting: any
+  targeting?: any
   budget?: number
   startDate: Date
   endDate?: Date
@@ -24,9 +24,6 @@ export interface UpdateAdData {
   placement?: string
   targeting?: any
   budget?: number
-  spent?: number
-  impressions?: number
-  clicks?: number
   startDate?: Date
   endDate?: Date
 }
@@ -34,26 +31,24 @@ export interface UpdateAdData {
 export interface AdFilters {
   page?: number
   limit?: number
-  type?: AdType
   status?: AdStatus
+  type?: AdType
   placement?: string
   search?: string
-  dateFrom?: Date
-  dateTo?: Date
 }
 
 export class AdService {
   static async getAds(filters: AdFilters = {}) {
-    const { page = 1, limit = 10, type, status, placement, search, dateFrom, dateTo } = filters
+    const { page = 1, limit = 10, status, type, placement, search } = filters
 
     const where: any = {}
 
-    if (type) {
-      where.type = type
-    }
-
     if (status) {
       where.status = status
+    }
+
+    if (type) {
+      where.type = type
     }
 
     if (placement) {
@@ -63,15 +58,8 @@ export class AdService {
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { placement: { contains: search, mode: 'insensitive' } }
+        { description: { contains: search, mode: 'insensitive' } }
       ]
-    }
-
-    if (dateFrom || dateTo) {
-      where.startDate = {}
-      if (dateFrom) where.startDate.gte = dateFrom
-      if (dateTo) where.startDate.lte = dateTo
     }
 
     const [ads, total] = await Promise.all([
@@ -106,9 +94,9 @@ export class AdService {
       data: {
         ...data,
         status: 'active',
-        spent: 0,
         impressions: 0,
-        clicks: 0
+        clicks: 0,
+        spent: 0
       }
     })
   }
@@ -126,127 +114,157 @@ export class AdService {
     })
   }
 
-  static async getAdStats() {
-    const [total, active, paused, completed] = await Promise.all([
+  static async getAdAnalytics() {
+    const [totalAds, activeAds, totalImpressions, totalClicks, totalSpent, totalBudget] = await Promise.all([
       prisma.ad.count(),
       prisma.ad.count({ where: { status: 'active' } }),
-      prisma.ad.count({ where: { status: 'paused' } }),
-      prisma.ad.count({ where: { status: 'completed' } })
-    ])
-
-    const [totalSpent, totalImpressions, totalClicks] = await Promise.all([
-      prisma.ad.aggregate({
-        _sum: { spent: true }
-      }),
       prisma.ad.aggregate({
         _sum: { impressions: true }
       }),
       prisma.ad.aggregate({
         _sum: { clicks: true }
+      }),
+      prisma.ad.aggregate({
+        _sum: { spent: true }
+      }),
+      prisma.ad.aggregate({
+        _sum: { budget: true }
       })
     ])
 
-    const ctr = totalImpressions._sum.impressions && totalImpressions._sum.impressions > 0 
-      ? (totalClicks._sum.clicks || 0) / totalImpressions._sum.impressions * 100 
-      : 0
+    const impressionsSum = totalImpressions._sum.impressions || 0
+    const clicksSum = totalClicks._sum.clicks || 0
+    const ctr = impressionsSum > 0 ? (clicksSum / impressionsSum) * 100 : 0
 
     return {
-      total,
-      active,
-      paused,
-      completed,
+      totalAds,
+      activeAds,
+      totalImpressions: impressionsSum,
+      totalClicks: clicksSum,
       totalSpent: totalSpent._sum.spent || 0,
-      totalImpressions: totalImpressions._sum.impressions || 0,
-      totalClicks: totalClicks._sum.clicks || 0,
-      ctr: Math.round(ctr * 100) / 100
+      totalBudget: totalBudget._sum.budget || 0,
+      averageCTR: ctr,
+      revenue: totalSpent._sum.spent || 0 // Simplified: spent = revenue for now
     }
   }
 
-  // Ad performance tracking
-  static async recordImpression(id: string) {
-    return prisma.ad.update({
-      where: { id },
-      data: {
-        impressions: { increment: 1 }
-      }
-    })
-  }
-
-  static async recordClick(id: string) {
-    return prisma.ad.update({
-      where: { id },
-      data: {
-        clicks: { increment: 1 }
-      }
-    })
-  }
-
-  static async updateSpent(id: string, amount: number) {
-    return prisma.ad.update({
-      where: { id },
-      data: {
-        spent: { increment: amount }
-      }
-    })
-  }
-
-  // Ad analytics
-  static async getAdPerformanceAnalytics(days = 30) {
+  static async getAdPerformance() {
+    // Get top performing ads by CTR
     const ads = await prisma.ad.findMany({
       where: {
-        status: { in: ['active', 'completed'] }
-      },
-      select: {
-        id: true,
-        title: true,
-        type: true,
-        impressions: true,
-        clicks: true,
-        spent: true,
-        budget: true
-      }
-    })
-
-    return ads.map(ad => {
-      const ctr = ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100 : 0
-      const cpc = ad.clicks > 0 ? ad.spent / ad.clicks : 0
-      const budgetUsed = ad.budget ? (ad.spent / ad.budget) * 100 : 0
-
-      return {
-        ...ad,
-        ctr: Math.round(ctr * 100) / 100,
-        cpc: Math.round(cpc * 100) / 100,
-        budgetUsed: Math.round(budgetUsed * 10) / 10
-      }
-    })
-  }
-
-  static async getAdsByType(type: AdType) {
-    return prisma.ad.findMany({
-      where: { type },
-      orderBy: { createdAt: 'desc' }
-    })
-  }
-
-  static async getTopPerformingAds(limit = 10) {
-    return prisma.ad.findMany({
-      where: {
-        status: { in: ['active', 'completed'] },
+        status: 'active',
         impressions: { gt: 0 }
       },
-      orderBy: [
-        { clicks: 'desc' },
-        { impressions: 'desc' }
-      ],
-      take: limit
+      orderBy: { createdAt: 'desc' }
+    })
+
+    // Calculate CTR for each ad and sort
+    const adsWithCTR = ads.map(ad => ({
+      ...ad,
+      ctr: ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100 : 0
+    })).sort((a, b) => b.ctr - a.ctr)
+
+    return {
+      topPerformingAds: adsWithCTR.slice(0, 5),
+      totalCampaigns: ads.length
+    }
+  }
+
+  static async getAdSuggestions() {
+    const analytics = await this.getAdAnalytics()
+    const performance = await this.getAdPerformance()
+
+    const suggestions = []
+
+    // Analyze performance and generate suggestions
+    if (analytics.averageCTR < 2) {
+      suggestions.push({
+        type: 'optimization',
+        title: 'CTR Optimizasyonu',
+        description: 'Ortalama tıklama oranınız düşük. Reklam içeriklerini ve hedeflemeyi gözden geçirin.',
+        priority: 'high',
+        expectedImpact: 'CTR\'de %50-100 artış beklenir'
+      })
+    }
+
+    if (performance.topPerformingAds.length > 0) {
+      const bestAd = performance.topPerformingAds[0]
+      if (bestAd.type === 'video') {
+        suggestions.push({
+          type: 'expansion',
+          title: 'Video Reklamları Artırın',
+          description: 'Video reklamlarınız en iyi performansı gösteriyor. Daha fazla video reklam alanı açın.',
+          priority: 'medium',
+          expectedImpact: 'Gelirde %25-40 artış'
+        })
+      }
+    }
+
+    if (analytics.totalSpent < analytics.totalBudget * 0.7) {
+      suggestions.push({
+        type: 'budget',
+        title: 'Bütçe Optimizasyonu',
+        description: 'Bütçenizin sadece %' + Math.round((analytics.totalSpent / analytics.totalBudget) * 100) + '\'ini kullanıyorsunuz. Daha agresif kampanyalar düşünün.',
+        priority: 'low',
+        expectedImpact: 'Erişimde artış'
+      })
+    }
+
+    // Add A/B test suggestion
+    suggestions.push({
+      type: 'testing',
+      title: 'A/B Test Önerisi',
+      description: 'Farklı reklam formatları ve konumları için A/B test yapılması önerilir.',
+      priority: 'medium',
+      expectedImpact: 'Performansta %15-25 iyileşme'
+    })
+
+    return {
+      suggestions,
+      performanceInsights: {
+        bestPerformingType: performance.topPerformingAds[0]?.type || 'banner',
+        averageCTR: analytics.averageCTR,
+        budgetUtilization: analytics.totalBudget > 0 ? (analytics.totalSpent / analytics.totalBudget) * 100 : 0
+      }
+    }
+  }
+
+  static async updateAdStats(id: string, impressions: number, clicks: number, spent: number) {
+    return prisma.ad.update({
+      where: { id },
+      data: {
+        impressions: { increment: impressions },
+        clicks: { increment: clicks },
+        spent: { increment: spent }
+      }
     })
   }
 
-  // Ad targeting and optimization
-  static async getAdsByPlacement(placement: string) {
-    return prisma.ad.findMany({
-      where: { placement },
-      orderBy: { createdAt: 'desc' }
+  static async getAdsByType() {
+    return prisma.ad.groupBy({
+      by: ['type'],
+      _count: {
+        type: true
+      },
+      _sum: {
+        impressions: true,
+        clicks: true,
+        spent: true
+      }
+    })
+  }
+
+  static async getAdsByPlacement() {
+    return prisma.ad.groupBy({
+      by: ['placement'],
+      _count: {
+        placement: true
+      },
+      _sum: {
+        impressions: true,
+        clicks: true,
+        spent: true
+      }
     })
   }
 
@@ -254,64 +272,38 @@ export class AdService {
     return this.updateAd(id, { status: 'paused' })
   }
 
-  static async resumeAd(id: string) {
+  static async activateAd(id: string) {
     return this.updateAd(id, { status: 'active' })
   }
 
-  static async completeAd(id: string) {
-    return this.updateAd(id, { status: 'completed' })
-  }
-
-  // Bulk operations
-  static async bulkUpdateAdStatus(adIds: string[], status: AdStatus) {
-    return prisma.ad.updateMany({
-      where: { id: { in: adIds } },
-      data: { status }
+  static async getExpiredAds() {
+    return prisma.ad.findMany({
+      where: {
+        endDate: {
+          lt: new Date()
+        },
+        status: 'active'
+      }
     })
   }
 
-  static async bulkDeleteAds(adIds: string[]) {
-    return prisma.ad.deleteMany({
-      where: { id: { in: adIds } }
-    })
-  }
+  static async markExpiredAds() {
+    const expiredAds = await this.getExpiredAds()
 
-  // Revenue optimization
-  static async getRevenueReport(dateFrom?: Date, dateTo?: Date) {
-    const where: any = {}
-
-    if (dateFrom || dateTo) {
-      where.createdAt = {}
-      if (dateFrom) where.createdAt.gte = dateFrom
-      if (dateTo) where.createdAt.lte = dateTo
+    if (expiredAds.length > 0) {
+      await prisma.ad.updateMany({
+        where: {
+          id: {
+            in: expiredAds.map(ad => ad.id)
+          }
+        },
+        data: {
+          status: 'completed'
+        }
+      })
     }
 
-    const revenue = await prisma.ad.aggregate({
-      where,
-      _sum: {
-        spent: true,
-        impressions: true,
-        clicks: true
-      },
-      _count: true
-    })
-
-    const avgCpc = revenue._sum.clicks && revenue._sum.clicks > 0 
-      ? (revenue._sum.spent || 0) / revenue._sum.clicks 
-      : 0
-
-    const avgCtr = revenue._sum.impressions && revenue._sum.impressions > 0 
-      ? (revenue._sum.clicks || 0) / revenue._sum.impressions * 100 
-      : 0
-
-    return {
-      totalRevenue: revenue._sum.spent || 0,
-      totalImpressions: revenue._sum.impressions || 0,
-      totalClicks: revenue._sum.clicks || 0,
-      totalAds: revenue._count,
-      avgCpc: Math.round(avgCpc * 100) / 100,
-      avgCtr: Math.round(avgCtr * 100) / 100
-    }
+    return expiredAds.length
   }
 
   // Validation
@@ -327,12 +319,12 @@ export class AdService {
       }
     }
 
-    if ('description' in data && data.description) {
-      if (data.description.length < 10) {
-        errors.push('Description must be at least 10 characters long')
+    if ('budget' in data && data.budget !== undefined) {
+      if (data.budget < 0) {
+        errors.push('Budget cannot be negative')
       }
-      if (data.description.length > 500) {
-        errors.push('Description must be less than 500 characters')
+      if (data.budget > 100000) {
+        errors.push('Budget cannot exceed $100,000')
       }
     }
 
@@ -341,19 +333,6 @@ export class AdService {
         new URL(data.targetUrl)
       } catch {
         errors.push('Target URL must be a valid URL')
-      }
-    }
-
-    if ('budget' in data && data.budget !== undefined) {
-      if (data.budget < 0) {
-        errors.push('Budget cannot be negative')
-      }
-    }
-
-    if ('startDate' in data && data.startDate) {
-      const now = new Date()
-      if (data.startDate < now) {
-        errors.push('Start date cannot be in the past')
       }
     }
 

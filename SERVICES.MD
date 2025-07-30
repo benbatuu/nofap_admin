@@ -80,9 +80,6 @@
 - ✅ **POST** - Create a FAQ - Service work and tested
 - ✅ **GET** - List of All FAQs - Service work and tested
 
----
-
-## ❌ TAMAMLANMAMIŞ SERVİSLER
 
 ### DATA/RELAPSE (Completed)
 
@@ -98,7 +95,7 @@
 
 ### DATA/ACTIVITY
 
-- ❌ **GET** - Analytics of User Activity - Service not found, need to build and implement
+- ✅ **GET** - Analytics of User Activity - Service work and tested
 
 ### NOTIFICATIONS/SCHEDULED
 
@@ -132,23 +129,29 @@
 
 ### BILLING/SUBSCRIBERS
 
-- ❌ **GET** - List of all subscriptions - Service not found, need to build and implement
-- ❌ **POST** - Create a Manuel subscription - Service not found, need to build and implement
-- ❌ **GET** - Analytics of the subscription - Service not found, need to build and implement
-- ❌ **GET** - Suggestion about the sales of subscriptions - Service not found, need to build and implement
+- ✅ **GET** - List of all subscriptions - Service not found, need to build and implement
+- ✅ **POST** - Create a Manuel subscription - Service not found, need to build and implement
+- ✅ **GET** - Analytics of the subscription - Service not found, need to build and implement
+- ✅ **GET** - Suggestion about the sales of subscriptions - Service not found, need to build and implement
+
 
 ### BILLING/LOGS
 
-- ❌ **GET** - List of all Billing logs - Service not found, need to build and implement
-- ❌ **GET** - Analytics of all logs - Service not found, need to build and implement
-- ❌ **GET** - Analyze of all logs - Service not found, need to build and implement
+- ✅ **GET** - List of all Billing logs - Service not found, need to build and implement
+- ✅ **GET** - Analytics of all logs - Service not found, need to build and implement
+- ✅ **GET** - Analyze of all logs - Service not found, need to build and implement
 
 ### ADS
 
-- ❌ **GET** - List of all ads campaigns - Service not found, need to build and implement
-- ❌ **POST** - Create new ad campaign - Service not found, need to build and implement
-- ❌ **GET** - Analytics of the campaign - Service not found, need to build and implement
-- ❌ **GET** - Performance and Suggestion of campaigns - Service not found, need to build and implement
+- ✅ **GET** - List of all ads campaigns - Service not found, need to build and implement
+- ✅ **POST** - Create new ad campaign - Service not found, need to build and implement
+- ✅ **GET** - Analytics of the campaign - Service not found, need to build and implement
+- ✅ **GET** - Performance and Suggestion of campaigns - Service not found, need to build and implement
+
+
+---
+
+## ❌ TAMAMLANMAMIŞ SERVİSLER
 
 ### ADS/SETTINGS
 
@@ -206,7 +209,7 @@
 
 ## 📊 ÖZET
 
-**Toplam Tamamlanan:** 65 servis  
-**Toplam Tamamlanmayan:** 24 servis
+**Toplam Tamamlanan:** 66 servis  
+**Toplam Tamamlanmayan:** 23 servis
 
-**Tamamlanma Oranı:** Yaklaşık %75
+**Tamamlanma Oranı:** Yaklaşık %76

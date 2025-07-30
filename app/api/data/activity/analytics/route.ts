@@ -6,12 +6,16 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId') || undefined;
         const type = searchParams.get('type') || undefined;
+        const timeFilter = searchParams.get('timeFilter') || '24h';
+        const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 50;
         const dateFrom = searchParams.get('dateFrom') ? new Date(searchParams.get('dateFrom')!) : undefined;
         const dateTo = searchParams.get('dateTo') ? new Date(searchParams.get('dateTo')!) : undefined;
 
         const analytics = await ActivityAnalyticsService.getActivityAnalytics({
             userId,
             type,
+            timeFilter,
+            limit,
             dateFrom,
             dateTo
         });

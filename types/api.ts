@@ -1,19 +1,19 @@
 // API response types
 
 export interface DashboardStats {
-    users:{
+    users: {
         total: number
         active: number
         premium: number
         banned: number
     },
-    messages:{
+    messages: {
         total: number
         replied: number
         pending: number
         read: number
     },
-    tasks:{
+    tasks: {
         active: number
         completed: number
         expired: number
@@ -45,7 +45,7 @@ export interface SystemStatus {
     }
 }
 
-export interface StatisticData{
+export interface StatisticData {
     keyMetrics: {
         title: string
         value: string
@@ -68,7 +68,7 @@ export interface StatisticData{
         completed: number
         total: number
         completionRate: number
-    }[] 
+    }[]
     popularCategories: {
         count: number
         name: string
@@ -80,7 +80,7 @@ export interface StatisticData{
         isPremium: boolean
         name: string
         streak: number
-        _count:{
+        _count: {
             tasks: number
         }
     }[]
@@ -286,49 +286,49 @@ export interface RelapseData {
     createdAt?: string
     updatedAt?: string
     user?: {
-      name: string
-      email: string
+        name: string
+        email: string
     }
-  }
-  
-  export interface RelapseFilters {
+}
+
+export interface RelapseFilters {
     timeFilter?: 'all' | 'today' | 'week' | 'month'
     severityFilter?: 'all' | 'low' | 'medium' | 'high'
     page?: number
     limit?: number
     userId?: string
-  }
-  
-  export interface RelapseResponse {
+}
+
+export interface RelapseResponse {
     data: RelapseData[]
     pagination: {
-      total: number
-      page: number
-      pages: number
-      limit: number
+        total: number
+        page: number
+        pages: number
+        limit: number
     }
-  }
-  
-  export interface TriggerStat {
+}
+
+export interface TriggerStat {
     trigger: string
     count: number
     percentage: string
-  }
-  
-  export interface RelapseStats {
+}
+
+export interface RelapseStats {
     today: number
     week: number
     month: number
     averageStreak: number
     triggerStats: TriggerStat[]
-  }
-  
-  export interface ApiError {
+}
+
+export interface ApiError {
     message: string
     status?: number
     code?: string
-  }
-  
+}
+
 
 // Data activity types 
 
@@ -341,65 +341,194 @@ export interface UserActivity {
     location: string;
     actions: string[];
     status: 'online' | 'away' | 'offline';
-  }
-  
-  export interface ActivityStats {
+}
+
+export interface ActivityStats {
     onlineUsers: number;
     dailyActiveUsers: number;
     averageSessionDuration: string;
     engagementRate: number;
     dailyActiveUsersChange: string;
     sessionDurationChange: string;
-  }
-  
-  export interface DeviceStats {
+}
+
+export interface DeviceStats {
     device: string;
     count: number;
     percentage: number;
-  }
-  
-  export interface ActivityInsight {
+}
+
+export interface ActivityInsight {
     type: 'info' | 'success' | 'warning' | 'error';
     title: string;
     description: string;
     color: 'blue' | 'green' | 'yellow' | 'red';
-  }
-  
-  export interface ActivityAnalytics {
+}
+
+export interface ActivityAnalytics {
     stats: ActivityStats;
     deviceStats: DeviceStats[];
     recentActivities: UserActivity[];
     insights: ActivityInsight[];
     totalUsers: number;
     peakHours: string;
-  }
-  
-  export interface ActivityFilters {
+}
+
+export interface ActivityFilters {
     timeFilter?: string;
     deviceFilter?: string;
     userId?: string;
     limit?: number;
     page?: number;
     dateRange?: {
-      start: Date;
-      end: Date;
+        start: Date;
+        end: Date;
     };
-  }
-  
-  export interface ActivityApiFilters {
+}
+
+export interface ActivityApiFilters {
     timeFilter?: string;
     userId?: string;
     limit?: number;
-  }
-  
-  export interface ApiResponse<T> {
+}
+
+export interface ApiResponse<T> {
     data: T;
     success: boolean;
     message?: string;
     pagination?: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
     };
-  }
+}
+
+// Product and Subscription types
+export interface Product {
+    id: string
+    name: string
+    description: string
+    price: number
+    currency: string
+    interval: 'monthly' | 'yearly'
+    features: string[]
+    isActive: boolean
+    subscribers: number
+    createdAt: string
+    updatedAt: string
+}
+
+export interface ProductsResponse {
+    data: Product[]
+    pagination: {
+        total: number
+        page: number
+        limit: number
+        totalPages: number
+    }
+}
+
+export interface CreateProductData {
+    name: string
+    description: string
+    price: number
+    currency: string
+    interval: 'monthly' | 'yearly'
+    features: string[]
+}
+
+export interface UpdateProductData {
+    name?: string
+    description?: string
+    price?: number
+    currency?: string
+    interval?: 'monthly' | 'yearly'
+    features?: string[]
+    isActive?: boolean
+}
+
+export interface Subscription {
+    id: string
+    userId: string
+    productId: string
+    status: 'active' | 'cancelled' | 'expired' | 'pending'
+    startDate: string
+    endDate: string
+    price: number
+    currency: string
+    paymentMethod: string
+    createdAt: string
+    updatedAt: string
+    user: {
+        id: string
+        name: string
+        email: string
+    }
+    product: {
+        id: string
+        name: string
+        interval: string
+    }
+}
+
+export interface SubscriptionsResponse {
+    data: Subscription[]
+    pagination: {
+        total: number
+        page: number
+        limit: number
+        totalPages: number
+    }
+}
+
+export interface CreateSubscriptionData {
+    userId: string
+    productId: string
+    paymentMethod: string
+    startDate?: string
+    endDate?: string
+}
+
+export interface ProductAnalytics {
+    totalRevenue: number
+    totalSubscribers: number
+    monthlyGrowth: number
+    conversionRate: number
+    averageRevenuePerUser: number
+    revenueByProduct: {
+        productId: string
+        productName: string
+        revenue: number
+        subscribers: number
+    }[]
+    subscriptionTrends: {
+        date: string
+        newSubscriptions: number
+        cancelledSubscriptions: number
+        revenue: number
+    }[]
+}
+
+export interface ProductSuggestions {
+    marketingSuggestions: {
+        strategy: string
+        description: string
+        targetAudience: string
+        expectedConversion: number
+        priority: 'high' | 'medium' | 'low'
+    }[]
+    pricingSuggestions: {
+        productId: string
+        currentPrice: number
+        suggestedPrice: number
+        reason: string
+        expectedImpact: string
+    }[]
+    featureSuggestions: {
+        productId: string
+        suggestedFeatures: string[]
+        reason: string
+        marketDemand: number
+    }[]
+}

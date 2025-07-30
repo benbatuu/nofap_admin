@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AdService } from '@/lib/services/ad.service'
+import { BillingService } from '@/lib/services'
 
 function logRequest(method: string, url: string, params?: any) {
     console.log(`[${new Date().toISOString()}] ${method} ${url}`, params ? { params } : '')
@@ -20,12 +20,12 @@ export async function GET(
         const { id } = await params
         logRequest('GET', url, { id })
 
-        const ad = await AdService.getAdById(id)
+        const billingLog = await BillingService.getBillingLogById(id)
 
-        if (!ad) {
+        if (!billingLog) {
             logResponse('GET', url, false, Date.now() - startTime)
             return NextResponse.json(
-                { success: false, error: 'Ad not found' },
+                { success: false, error: 'Billing log not found' },
                 { status: 404 }
             )
         }
@@ -34,13 +34,13 @@ export async function GET(
 
         return NextResponse.json({
             success: true,
-            data: ad
+            data: billingLog
         })
     } catch (error) {
         logResponse('GET', url, false, Date.now() - startTime)
-        console.error('Get Ad API error:', error)
+        console.error('Get Billing Log API error:', error)
         return NextResponse.json(
-            { success: false, error: 'Failed to fetch ad' },
+            { success: false, error: 'Failed to fetch billing log' },
             { status: 500 }
         )
     }
@@ -59,7 +59,7 @@ export async function PUT(
         logRequest('PUT', url, { id, ...body })
 
         // Validate data
-        const errors = AdService.validateAdData(body)
+        const errors = BillingService.validateBillingData(body)
         if (errors.length > 0) {
             return NextResponse.json(
                 { success: false, error: 'Validation failed', details: errors },
@@ -67,19 +67,19 @@ export async function PUT(
             )
         }
 
-        const ad = await AdService.updateAd(id, body)
+        const billingLog = await BillingService.updateBillingLog(id, body)
 
         logResponse('PUT', url, true, Date.now() - startTime)
 
         return NextResponse.json({
             success: true,
-            data: ad
+            data: billingLog
         })
     } catch (error) {
         logResponse('PUT', url, false, Date.now() - startTime)
-        console.error('Update Ad API error:', error)
+        console.error('Update Billing Log API error:', error)
         return NextResponse.json(
-            { success: false, error: 'Failed to update ad' },
+            { success: false, error: 'Failed to update billing log' },
             { status: 500 }
         )
     }
@@ -96,19 +96,19 @@ export async function DELETE(
         const { id } = await params
         logRequest('DELETE', url, { id })
 
-        await AdService.deleteAd(id)
+        await BillingService.deleteBillingLog(id)
 
         logResponse('DELETE', url, true, Date.now() - startTime)
 
         return NextResponse.json({
             success: true,
-            message: 'Ad deleted successfully'
+            message: 'Billing log deleted successfully'
         })
     } catch (error) {
         logResponse('DELETE', url, false, Date.now() - startTime)
-        console.error('Delete Ad API error:', error)
+        console.error('Delete Billing Log API error:', error)
         return NextResponse.json(
-            { success: false, error: 'Failed to delete ad' },
+            { success: false, error: 'Failed to delete billing log' },
             { status: 500 }
         )
     }

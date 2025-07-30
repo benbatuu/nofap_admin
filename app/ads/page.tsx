@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,46 +11,79 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { DollarSign, Eye, MousePointer, TrendingUp, Plus, Edit, Trash2 } from "lucide-react"
+import { DollarSign, Eye, MousePointer, TrendingUp, Plus, Edit, Trash2, RefreshCw, Loader2 } from "lucide-react"
+import { useAds, useAdAnalytics, useAdSuggestions, useCreateAd, useUpdateAd, useDeleteAd } from "@/hooks/use-api"
+import { toast } from "sonner"
 
-const adCampaigns = [
-  {
-    id: "1",
-    name: "Banner Ana Sayfa",
-    type: "banner",
-    position: "header",
-    status: "active",
-    impressions: 45231,
-    clicks: 892,
-    ctr: 1.97,
-    revenue: 234.56,
-    advertiser: "Health & Wellness Co."
-  },
-  {
-    id: "2",
-    name: "Video Reklam",
-    type: "video",
-    position: "feed",
-    status: "active",
-    impressions: 23456,
-    clicks: 1234,
-    ctr: 5.26,
-    revenue: 456.78,
-    advertiser: "Fitness App"
-  },
-  {
-    id: "3",
-    name: "Sidebar Reklam",
-    type: "display",
-    position: "sidebar",
-    status: "paused",
-    impressions: 12345,
-    clicks: 234,
-    ctr: 1.89,
-    revenue: 123.45,
-    advertiser: "Mental Health Platform"
+interface Ad {
+  id: string
+  title: string
+  description: string
+  imageUrl?: string
+  targetUrl: string
+  type: 'banner' | 'video' | 'display' | 'native'
+  status: 'active' | 'paused' | 'completed' | 'rejected'
+  placement: string
+  targeting?: any
+  budget?: number
+  spent: number
+  impressions: number
+  clicks: number
+  startDate: string
+  endDate?: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface AdAnalytics {
+  overview?: {
+    totalAds: number
+    activeAds: number
+    totalImpressions: number
+    totalClicks: number
+    totalSpent: number
+    totalBudget: number
+    averageCTR: number
+    revenue: number
   }
-]
+  performance?: {
+    topPerformingAds: Array<Ad & { ctr: number }>
+    totalCampaigns: number
+  }
+  breakdown?: {
+    byType: Array<{
+      type: string
+      count: number
+      impressions: number
+      clicks: number
+      spent: number
+      ctr: number
+    }>
+    byPlacement: Array<{
+      placement: string
+      count: number
+      impressions: number
+      clicks: number
+      spent: number
+      ctr: number
+    }>
+  }
+}
+
+interface AdSuggestions {
+  suggestions?: Array<{
+    type: string
+    title: string
+    description: string
+    priority: 'high' | 'medium' | 'low'
+    expectedImpact: string
+  }>
+  performanceInsights?: {
+    bestPerformingType: string
+    averageCTR: number
+    budgetUtilization: number
+  }
+}
 
 const adPositions = [
   { value: "header", label: "Üst Banner" },
@@ -61,18 +95,77 @@ const adPositions = [
 
 export default function AdsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [editingAd, setEditingAd] = useState<Ad | null>(null)
   const [newAd, setNewAd] = useState({
-    name: "",
-    type: "banner",
-    position: "header",
-    advertiser: "",
-    content: ""
+    title: "",
+    description: "",
+    targetUrl: "",
+    type: "banner" as const,
+    placement: "header",
+    budget: 0
   })
 
-  const totalRevenue = adCampaigns.reduce((sum, ad) => sum + ad.revenue, 0)
-  const totalImpressions = adCampaigns.reduce((sum, ad) => sum + ad.impressions, 0)
-  const totalClicks = adCampaigns.reduce((sum, ad) => sum + ad.clicks, 0)
-  const averageCTR = totalClicks / totalImpressions * 100
+  // API hooks
+  const { data: adsData, isLoading: adsLoading, error: adsError } = useAds()
+  const { data: analyticsData, isLoading: analyticsLoading } = useAdAnalytics()
+  const { data: suggestionsData, isLoading: suggestionsLoading } = useAdSuggestions()
+  const createAdMutation = useCreateAd()
+  const updateAdMutation = useUpdateAd()
+  const deleteAdMutation = useDeleteAd()
+
+  const ads = adsData?.data?.ads || []
+  const analytics = analyticsData?.data?.overview || {}
+  const suggestions = suggestionsData?.data?.suggestions || []
+
+  const handleCreateAd = async () => {
+    if (!newAd.title || !newAd.targetUrl) {
+      toast.error("Lütfen gerekli alanları doldurun")
+      return
+    }
+
+    try {
+      await createAdMutation.mutateAsync({
+        ...newAd,
+        startDate: new Date().toISOString(),
+      })
+      toast.success("Reklam kampanyası başarıyla oluşturuldu")
+      setIsCreateDialogOpen(false)
+      setNewAd({
+        title: "",
+        description: "",
+        targetUrl: "",
+        type: "banner",
+        placement: "header",
+        budget: 0
+      })
+    } catch (error) {
+      toast.error("Reklam kampanyası oluşturulurken hata oluştu")
+    }
+  }
+
+  const handleToggleAdStatus = async (ad: Ad) => {
+    try {
+      const newStatus = ad.status === 'active' ? 'paused' : 'active'
+      await updateAdMutation.mutateAsync({
+        id: ad.id,
+        data: { status: newStatus }
+      })
+      toast.success(`Reklam ${newStatus === 'active' ? 'aktif edildi' : 'duraklatıldı'}`)
+    } catch (error) {
+      toast.error("Reklam durumu güncellenirken hata oluştu")
+    }
+  }
+
+  const handleDeleteAd = async (id: string) => {
+    if (!confirm("Bu reklamı silmek istediğinizden emin misiniz?")) return
+
+    try {
+      await deleteAdMutation.mutateAsync(id)
+      toast.success("Reklam başarıyla silindi")
+    } catch (error) {
+      toast.error("Reklam silinirken hata oluştu")
+    }
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -99,22 +192,32 @@ export default function AdsPage() {
             </DialogHeader>
             <div className="space-y-4">
               <Input
-                placeholder="Kampanya adı"
-                value={newAd.name}
-                onChange={(e) => setNewAd({ ...newAd, name: e.target.value })}
+                placeholder="Kampanya başlığı"
+                value={newAd.title}
+                onChange={(e) => setNewAd({ ...newAd, title: e.target.value })}
               />
-              <Select value={newAd.type} onValueChange={(value) => setNewAd({ ...newAd, type: value })}>
+              <Textarea
+                placeholder="Kampanya açıklaması"
+                value={newAd.description}
+                onChange={(e) => setNewAd({ ...newAd, description: e.target.value })}
+              />
+              <Input
+                placeholder="Hedef URL"
+                value={newAd.targetUrl}
+                onChange={(e) => setNewAd({ ...newAd, targetUrl: e.target.value })}
+              />
+              <Select value={newAd.type} onValueChange={(value: any) => setNewAd({ ...newAd, type: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Reklam türü" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="banner">Banner</SelectItem>
                   <SelectItem value="video">Video</SelectItem>
-                  <SelectItem value="display">Display</SelectItem>
+                  <SelectItem value="popup">Pop-up</SelectItem>
                   <SelectItem value="native">Native</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={newAd.position} onValueChange={(value) => setNewAd({ ...newAd, position: value })}>
+              <Select value={newAd.placement} onValueChange={(value) => setNewAd({ ...newAd, placement: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Konum" />
                 </SelectTrigger>
@@ -127,16 +230,17 @@ export default function AdsPage() {
                 </SelectContent>
               </Select>
               <Input
-                placeholder="Reklamveren"
-                value={newAd.advertiser}
-                onChange={(e) => setNewAd({ ...newAd, advertiser: e.target.value })}
+                type="number"
+                placeholder="Bütçe ($)"
+                value={newAd.budget}
+                onChange={(e) => setNewAd({ ...newAd, budget: parseFloat(e.target.value) || 0 })}
               />
-              <Textarea
-                placeholder="Reklam içeriği/URL"
-                value={newAd.content}
-                onChange={(e) => setNewAd({ ...newAd, content: e.target.value })}
-              />
-              <Button className="w-full" onClick={() => setIsCreateDialogOpen(false)}>
+              <Button
+                className="w-full"
+                onClick={handleCreateAd}
+                disabled={createAdMutation.isPending}
+              >
+                {createAdMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Kampanya Oluştur
               </Button>
             </div>
@@ -152,7 +256,13 @@ export default function AdsPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">
+              {analyticsLoading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                `$${(analytics.revenue || 0).toFixed(2)}`
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">Bu ay</p>
           </CardContent>
         </Card>
@@ -163,8 +273,14 @@ export default function AdsPage() {
             <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalImpressions.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">+12% geçen aydan</p>
+            <div className="text-2xl font-bold">
+              {analyticsLoading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                (analytics.totalImpressions || 0).toLocaleString()
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Toplam gösterim</p>
           </CardContent>
         </Card>
 
@@ -174,8 +290,14 @@ export default function AdsPage() {
             <MousePointer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalClicks.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">+8% artış</p>
+            <div className="text-2xl font-bold">
+              {analyticsLoading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                (analytics.totalClicks || 0).toLocaleString()
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Toplam tıklama</p>
           </CardContent>
         </Card>
 
@@ -185,7 +307,13 @@ export default function AdsPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{averageCTR.toFixed(2)}%</div>
+            <div className="text-2xl font-bold">
+              {analyticsLoading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                `${(analytics.averageCTR || 0).toFixed(2)}%`
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">Tıklama oranı</p>
           </CardContent>
         </Card>
@@ -200,63 +328,98 @@ export default function AdsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Kampanya</TableHead>
-                <TableHead>Tür</TableHead>
-                <TableHead>Konum</TableHead>
-                <TableHead>Reklamveren</TableHead>
-                <TableHead>Gösterim</TableHead>
-                <TableHead>Tıklama</TableHead>
-                <TableHead>CTR</TableHead>
-                <TableHead>Gelir</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead className="text-right">İşlemler</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {adCampaigns.map((campaign) => (
-                <TableRow key={campaign.id}>
-                  <TableCell className="font-medium">{campaign.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {campaign.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {adPositions.find(p => p.value === campaign.position)?.label}
-                  </TableCell>
-                  <TableCell>{campaign.advertiser}</TableCell>
-                  <TableCell>{campaign.impressions.toLocaleString()}</TableCell>
-                  <TableCell>{campaign.clicks.toLocaleString()}</TableCell>
-                  <TableCell>{campaign.ctr.toFixed(2)}%</TableCell>
-                  <TableCell>${campaign.revenue.toFixed(2)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Switch checked={campaign.status === "active"} />
-                      <Badge
-                        variant={campaign.status === "active" ? "default" : "secondary"}
-                        className={campaign.status === "active" ? "bg-green-500" : ""}
-                      >
-                        {campaign.status === "active" ? "Aktif" : "Duraklatıldı"}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      <Button variant="ghost" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="text-red-600">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {adsLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : adsError ? (
+            <div className="text-center p-8 text-red-600">
+              Reklamlar yüklenirken hata oluştu
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Kampanya</TableHead>
+                  <TableHead>Tür</TableHead>
+                  <TableHead>Konum</TableHead>
+                  <TableHead>Gösterim</TableHead>
+                  <TableHead>Tıklama</TableHead>
+                  <TableHead>CTR</TableHead>
+                  <TableHead>Harcanan</TableHead>
+                  <TableHead>Durum</TableHead>
+                  <TableHead className="text-right">İşlemler</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {ads.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center p-8 text-muted-foreground">
+                      Henüz reklam kampanyası bulunmuyor
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  ads.map((ad: Ad) => {
+                    const ctr = ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100 : 0
+                    return (
+                      <TableRow key={ad.id}>
+                        <TableCell className="font-medium">{ad.title}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {ad.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {adPositions.find(p => p.value === ad.placement)?.label || ad.placement}
+                        </TableCell>
+                        <TableCell>{ad.impressions.toLocaleString()}</TableCell>
+                        <TableCell>{ad.clicks.toLocaleString()}</TableCell>
+                        <TableCell>{ctr.toFixed(2)}%</TableCell>
+                        <TableCell>${ad.spent.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              checked={ad.status === "active"}
+                              onCheckedChange={() => handleToggleAdStatus(ad)}
+                              disabled={updateAdMutation.isPending}
+                            />
+                            <Badge
+                              variant={ad.status === "active" ? "default" : "secondary"}
+                              className={ad.status === "active" ? "bg-green-500" : ""}
+                            >
+                              {ad.status === "active" ? "Aktif" :
+                                ad.status === "paused" ? "Duraklatıldı" :
+                                  ad.status === "completed" ? "Tamamlandı" : "Reddedildi"}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingAd(ad)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600"
+                              onClick={() => handleDeleteAd(ad.id)}
+                              disabled={deleteAdMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -266,29 +429,45 @@ export default function AdsPage() {
           <CardHeader>
             <CardTitle>En İyi Performans</CardTitle>
             <CardDescription>
-              En yüksek CTR'ye sahip kampanyalar
+              En yüksek CTR`ye sahip kampanyalar
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {adCampaigns
-                .sort((a, b) => b.ctr - a.ctr)
-                .slice(0, 3)
-                .map((campaign, index) => (
-                  <div key={campaign.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <div className="font-medium">{campaign.name}</div>
-                      <div className="text-sm text-muted-foreground">{campaign.advertiser}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-medium">{campaign.ctr.toFixed(2)}% CTR</div>
-                      <div className="text-sm text-muted-foreground">
-                        ${campaign.revenue.toFixed(2)} gelir
+            {adsLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {ads.length === 0 ? (
+                  <p className="text-center text-muted-foreground p-4">
+                    Henüz reklam kampanyası bulunmuyor
+                  </p>
+                ) : (
+                  ads
+                    .map((ad: Ad) => ({
+                      ...ad,
+                      ctr: ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100 : 0
+                    }))
+                    .sort((a: any, b: any) => b.ctr - a.ctr)
+                    .slice(0, 3)
+                    .map((ad: any) => (
+                      <div key={ad.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <div className="font-medium">{ad.title}</div>
+                          <div className="text-sm text-muted-foreground">{ad.description}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">{ad.ctr.toFixed(2)}% CTR</div>
+                          <div className="text-sm text-muted-foreground">
+                            ${ad.spent.toFixed(2)} harcandı
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
+                    ))
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -300,26 +479,47 @@ export default function AdsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              <div className="p-3 border rounded-lg bg-green-50 dark:bg-green-950/20">
-                <h4 className="font-medium text-green-800 dark:text-green-200">Video Reklamları</h4>
-                <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                  Video reklamlar en yüksek CTR'ye sahip. Daha fazla video reklam alanı açılabilir.
-                </p>
+            {suggestionsLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
               </div>
-              <div className="p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
-                <h4 className="font-medium text-blue-800 dark:text-blue-200">Konum Optimizasyonu</h4>
-                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                  İçerik arası reklamlar daha iyi performans gösteriyor. Sidebar reklamları gözden geçirin.
-                </p>
+            ) : (
+              <div className="space-y-3">
+                {suggestions.length === 0 ? (
+                  <p className="text-center text-muted-foreground p-4">
+                    Henüz öneri bulunmuyor
+                  </p>
+                ) : (
+                  suggestions.map((suggestion: any, index: number) => (
+                    <div
+                      key={index}
+                      className={`p-3 border rounded-lg ${suggestion.priority === 'high' ? 'bg-red-50 dark:bg-red-950/20' :
+                        suggestion.priority === 'medium' ? 'bg-yellow-50 dark:bg-yellow-950/20' :
+                          'bg-green-50 dark:bg-green-950/20'
+                        }`}
+                    >
+                      <h4 className={`font-medium ${suggestion.priority === 'high' ? 'text-red-800 dark:text-red-200' :
+                        suggestion.priority === 'medium' ? 'text-yellow-800 dark:text-yellow-200' :
+                          'text-green-800 dark:text-green-200'
+                        }`}>
+                        {suggestion.title}
+                      </h4>
+                      <p className={`text-sm mt-1 ${suggestion.priority === 'high' ? 'text-red-700 dark:text-red-300' :
+                        suggestion.priority === 'medium' ? 'text-yellow-700 dark:text-yellow-300' :
+                          'text-green-700 dark:text-green-300'
+                        }`}>
+                        {suggestion.description}
+                      </p>
+                      {suggestion.expectedImpact && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Beklenen etki: {suggestion.expectedImpact}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
-              <div className="p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
-                <h4 className="font-medium text-yellow-800 dark:text-yellow-200">A/B Test</h4>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                  Farklı reklam formatları için A/B test yapılması önerilir.
-                </p>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

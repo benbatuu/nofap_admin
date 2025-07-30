@@ -1,114 +1,168 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, CreditCard, AlertCircle, CheckCircle, XCircle, Clock, DollarSign, TrendingUp, Search } from "lucide-react"
+import { Calendar, CreditCard, AlertCircle, CheckCircle, XCircle, Clock, DollarSign, TrendingUp, Search, RefreshCw } from "lucide-react"
+import { useBillingLogs, useBillingAnalytics, useBillingAnalyze } from "@/hooks/use-api"
+import { toast } from "sonner"
 
-const billingLogs = [
-  {
-    id: "1",
-    transactionId: "txn_1234567890",
-    username: "premium_user_1",
-    email: "user1@example.com",
-    type: "subscription",
-    status: "success",
-    amount: 9.99,
-    currency: "USD",
-    paymentMethod: "Visa ****1234",
-    timestamp: "2024-01-25 14:30:25",
-    description: "NoFap Premium - Aylık abonelik",
-    gateway: "Stripe",
-    country: "TR"
-  },
-  {
-    id: "2",
-    transactionId: "txn_1234567891",
-    username: "yearly_subscriber",
-    email: "user2@example.com",
-    type: "subscription",
-    status: "success",
-    amount: 95.99,
-    currency: "USD",
-    paymentMethod: "PayPal",
-    timestamp: "2024-01-25 12:15:10",
-    description: "NoFap Premium Yıllık - Yıllık abonelik",
-    gateway: "PayPal",
-    country: "US"
-  },
-  {
-    id: "3",
-    transactionId: "txn_1234567892",
-    username: "failed_payment",
-    email: "user3@example.com",
-    type: "subscription",
-    status: "failed",
-    amount: 9.99,
-    currency: "USD",
-    paymentMethod: "Visa ****5678",
-    timestamp: "2024-01-25 10:45:33",
-    description: "NoFap Premium - Aylık abonelik (Yetersiz bakiye)",
-    gateway: "Stripe",
-    country: "DE"
-  },
-  {
-    id: "4",
-    transactionId: "txn_1234567893",
-    username: "refund_user",
-    email: "user4@example.com",
-    type: "refund",
-    status: "success",
-    amount: -9.99,
-    currency: "USD",
-    paymentMethod: "Visa ****9012",
-    timestamp: "2024-01-25 09:20:15",
-    description: "NoFap Premium - İade",
-    gateway: "Stripe",
-    country: "UK"
-  },
-  {
-    id: "5",
-    transactionId: "txn_1234567894",
-    username: "pending_user",
-    email: "user5@example.com",
-    type: "subscription",
-    status: "pending",
-    amount: 9.99,
-    currency: "USD",
-    paymentMethod: "Bank Transfer",
-    timestamp: "2024-01-25 08:10:42",
-    description: "NoFap Premium - Aylık abonelik (Banka transferi bekliyor)",
-    gateway: "Manual",
-    country: "FR"
+interface BillingLog {
+  id: string
+  userId: string
+  userName: string
+  amount: number
+  currency: string
+  status: 'success' | 'failed' | 'pending'
+  paymentMethod: string
+  description: string
+  createdAt: string
+  user?: {
+    id: string
+    name: string
+    email: string
+    avatar?: string
+    isPremium: boolean
   }
-]
+}
 
-const paymentStats = [
-  { status: "Başarılı", count: 1247, percentage: 89.2, color: "green" },
-  { status: "Başarısız", count: 89, percentage: 6.4, color: "red" },
-  { status: "Beklemede", count: 45, percentage: 3.2, color: "yellow" },
-  { status: "İade", count: 17, percentage: 1.2, color: "blue" }
-]
+interface Analytics {
+  overview?: {
+    totalTransactions: number
+    successfulTransactions: number
+    failedTransactions: number
+    pendingTransactions: number
+    totalRevenue: number
+    successRate: number
+    failureRate: number
+    pendingRate: number
+  }
+  today?: {
+    transactions: number
+    revenue: number
+    successfulTransactions: number
+    failedTransactions: number
+    pendingTransactions: number
+  }
+}
+
+interface Analysis {
+  issues?: Array<{
+    type: string
+    severity: 'high' | 'medium' | 'low'
+    title: string
+    description: string
+    suggestion?: string
+  }>
+  opportunities?: Array<{
+    type: string
+    title: string
+    description: string
+    expectedGain?: string
+  }>
+}
+
+
 
 export default function BillingLogsPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
+  const [page, setPage] = useState(1)
+  const [limit] = useState(10)
 
-  const filteredLogs = billingLogs.filter(log => {
-    const matchesSearch = log.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.transactionId.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || log.status === statusFilter
-    const matchesType = typeFilter === "all" || log.type === typeFilter
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+      setPage(1) // Reset to first page when searching
+    }, 500)
 
-    return matchesSearch && matchesStatus && matchesType
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [statusFilter, dateFilter])
+
+  // API Hooks
+  const {
+    data: billingLogsData,
+    isLoading: isLogsLoading,
+    error: logsError,
+    refetch: refetchLogs
+  } = useBillingLogs({
+    page,
+    limit,
+    status: statusFilter === "all" ? undefined : statusFilter,
+    search: debouncedSearchTerm || undefined,
+    // Date filter implementation
+    dateFrom: dateFilter === "today" ? new Date().toISOString().split('T')[0] :
+      dateFilter === "week" ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] :
+        dateFilter === "month" ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] :
+          undefined,
+    dateTo: dateFilter === "today" ? new Date().toISOString().split('T')[0] : undefined
   })
+
+  const {
+    data: analyticsData,
+    isLoading: isAnalyticsLoading,
+    error: analyticsError
+  } = useBillingAnalytics({ days: 30, period: 'month' })
+
+  const {
+    data: analyzeData,
+    isLoading: isAnalyzeLoading,
+    error: analyzeError
+  } = useBillingAnalyze()
+
+  // Handle errors
+  useEffect(() => {
+    if (logsError) {
+      toast.error('Ödeme logları yüklenirken hata oluştu')
+    }
+    if (analyticsError) {
+      toast.error('Analytics verileri yüklenirken hata oluştu')
+    }
+    if (analyzeError) {
+      toast.error('Analiz verileri yüklenirken hata oluştu')
+    }
+  }, [logsError, analyticsError, analyzeError])
+
+  const billingLogs: BillingLog[] = billingLogsData?.data?.billingLogs || []
+  const pagination = billingLogsData?.data?.pagination || { total: 0, page: 1, totalPages: 1 }
+  const analytics: Analytics = analyticsData?.data || {}
+  const analysis: Analysis = analyzeData?.data || {}
+
+  // Calculate payment stats from analytics
+  const paymentStats = useMemo(() => [
+    {
+      status: "Başarılı",
+      count: analytics.overview?.successfulTransactions || 0,
+      percentage: analytics.overview?.successRate || 0,
+      color: "green"
+    },
+    {
+      status: "Başarısız",
+      count: analytics.overview?.failedTransactions || 0,
+      percentage: analytics.overview?.failureRate || 0,
+      color: "red"
+    },
+    {
+      status: "Beklemede",
+      count: analytics.overview?.pendingTransactions || 0,
+      percentage: analytics.overview?.pendingRate || 0,
+      color: "yellow"
+    }
+  ], [analytics.overview])
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -119,6 +173,22 @@ export default function BillingLogsPage() {
             Tüm ödeme işlemlerini ve faturalandırma loglarını takip edin
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            try {
+              await refetchLogs()
+              toast.success('Veriler başarıyla yenilendi')
+            } catch (error) {
+              toast.error('Veriler yenilenirken hata oluştu')
+            }
+          }}
+          disabled={isLogsLoading}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLogsLoading ? 'animate-spin' : ''}`} />
+          Yenile
+        </Button>
       </div>
 
       {/* Genel İstatistikler */}
@@ -129,8 +199,17 @@ export default function BillingLogsPage() {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">156</div>
-            <p className="text-xs text-muted-foreground">+12% dünden</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{analytics.today?.transactions?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground">Bugün</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -140,8 +219,17 @@ export default function BillingLogsPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$2,450</div>
-            <p className="text-xs text-muted-foreground">Bugün</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">${analytics.today?.revenue?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground">Bugün</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -151,8 +239,17 @@ export default function BillingLogsPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">89.2%</div>
-            <p className="text-xs text-muted-foreground">+2.1% artış</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{analytics.overview?.successRate?.toFixed(1) || 0}%</div>
+                <p className="text-xs text-muted-foreground">Genel oran</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -162,8 +259,17 @@ export default function BillingLogsPage() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">45</div>
-            <p className="text-xs text-muted-foreground">Manuel onay bekliyor</p>
+            {isAnalyticsLoading ? (
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded"></div>
+                <div className="h-4 bg-muted rounded mt-2"></div>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{analytics.today?.pendingTransactions?.toLocaleString() || 0}</div>
+                <p className="text-xs text-muted-foreground">Manuel onay bekliyor</p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -177,33 +283,44 @@ export default function BillingLogsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {paymentStats.map((stat, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  {stat.color === "green" && <CheckCircle className="h-4 w-4 text-green-500 dark:text-green-400" />}
-                  {stat.color === "red" && <XCircle className="h-4 w-4 text-red-500 dark:text-red-400" />}
-                  {stat.color === "yellow" && <Clock className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />}
-                  {stat.color === "blue" && <AlertCircle className="h-4 w-4 text-blue-500 dark:text-blue-400" />}
-                  <div>
-                    <div className="font-medium">{stat.status}</div>
-                    <div className="text-sm text-muted-foreground">{stat.count} işlem</div>
+          {isAnalyticsLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="p-3 border rounded-lg">
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-muted rounded w-32 mb-2"></div>
+                    <div className="h-3 bg-muted rounded w-24"></div>
                   </div>
                 </div>
-                <Badge
-                  variant="outline"
-                  className={
-                    stat.color === "green" ? "border-green-500 text-green-700 dark:border-green-400 dark:text-green-300" :
-                      stat.color === "red" ? "border-red-500 text-red-700 dark:border-red-400 dark:text-red-300" :
-                        stat.color === "yellow" ? "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300" :
-                          "border-blue-500 text-blue-700 dark:border-blue-400 dark:text-blue-300"
-                  }
-                >
-                  {stat.percentage}%
-                </Badge>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {paymentStats.map((stat, index) => (
+                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    {stat.color === "green" && <CheckCircle className="h-4 w-4 text-green-500 dark:text-green-400" />}
+                    {stat.color === "red" && <XCircle className="h-4 w-4 text-red-500 dark:text-red-400" />}
+                    {stat.color === "yellow" && <Clock className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />}
+                    <div>
+                      <div className="font-medium">{stat.status}</div>
+                      <div className="text-sm text-muted-foreground">{stat.count.toLocaleString()} işlem</div>
+                    </div>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={
+                      stat.color === "green" ? "border-green-500 text-green-700 dark:border-green-400 dark:text-green-300" :
+                        stat.color === "red" ? "border-red-500 text-red-700 dark:border-red-400 dark:text-red-300" :
+                          "border-yellow-500 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300"
+                    }
+                  >
+                    {stat.percentage.toFixed(1)}%
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -280,69 +397,173 @@ export default function BillingLogsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredLogs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="font-mono text-sm">
-                    {log.transactionId}
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{log.username}</div>
-                      <div className="text-sm text-muted-foreground">{log.email}</div>
+              {isLogsLoading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-32"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-24 mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-32"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-muted rounded w-20"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-24"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-6 bg-muted rounded w-16"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-32"></div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="animate-pulse">
+                        <div className="h-4 bg-muted rounded w-40"></div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : billingLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8">
+                    <div className="text-muted-foreground">
+                      {debouncedSearchTerm || statusFilter !== "all" || dateFilter !== "all"
+                        ? "Arama kriterlerinize uygun ödeme logu bulunamadı"
+                        : "Henüz ödeme logu bulunmuyor"}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {log.type === "subscription" ? "Abonelik" :
-                        log.type === "refund" ? "İade" : "Diğer"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        log.status === "success" ? "default" :
-                          log.status === "failed" ? "destructive" :
-                            log.status === "pending" ? "secondary" : "outline"
-                      }
-                      className={
-                        log.status === "success" ? "bg-green-500 dark:bg-green-600" :
-                          log.status === "pending" ? "bg-yellow-500 dark:bg-yellow-600" : ""
-                      }
-                    >
-                      {log.status === "success" ? "Başarılı" :
-                        log.status === "failed" ? "Başarısız" :
-                          log.status === "pending" ? "Beklemede" : "Diğer"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className={`font-medium ${log.amount < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                      {log.amount < 0 ? "-" : ""}${Math.abs(log.amount)} {log.currency}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      <CreditCard className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-sm">{log.paymentMethod}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{log.gateway}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-sm">{log.timestamp}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="max-w-xs">
-                    <div className="text-sm text-muted-foreground truncate">
-                      {log.description}
-                    </div>
+                    {(debouncedSearchTerm || statusFilter !== "all" || dateFilter !== "all") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          setSearchTerm("")
+                          setDebouncedSearchTerm("")
+                          setStatusFilter("all")
+                          setDateFilter("all")
+                        }}
+                      >
+                        Filtreleri Temizle
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                billingLogs.map((log: BillingLog) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="font-mono text-sm">
+                      {log.id}
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{log.userName}</div>
+                        <div className="text-sm text-muted-foreground">{log.user?.email || 'N/A'}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        Ödeme
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          log.status === "success" ? "default" :
+                            log.status === "failed" ? "destructive" :
+                              log.status === "pending" ? "secondary" : "outline"
+                        }
+                        className={
+                          log.status === "success" ? "bg-green-500 dark:bg-green-600" :
+                            log.status === "pending" ? "bg-yellow-500 dark:bg-yellow-600" : ""
+                        }
+                      >
+                        {log.status === "success" ? "Başarılı" :
+                          log.status === "failed" ? "Başarısız" :
+                            log.status === "pending" ? "Beklemede" : "Diğer"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className={`font-medium ${log.amount < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                        {log.amount < 0 ? "-" : ""}${Math.abs(log.amount)} {log.currency}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-1">
+                        <CreditCard className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">{log.paymentMethod}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">Sistem</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-1">
+                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">{new Date(log.createdAt).toLocaleString('tr-TR')}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-xs">
+                      <div className="text-sm text-muted-foreground truncate">
+                        {log.description}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between px-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                Toplam {pagination.total} kayıt, sayfa {pagination.page} / {pagination.totalPages}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page - 1)}
+                  disabled={page <= 1 || isLogsLoading}
+                >
+                  Önceki
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page + 1)}
+                  disabled={page >= pagination.totalPages || isLogsLoading}
+                >
+                  Sonraki
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -355,26 +576,69 @@ export default function BillingLogsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="p-4 border rounded-lg bg-red-50 dark:bg-red-950/20">
-              <h4 className="font-medium text-red-800 dark:text-red-200">Başarısız Ödemeler</h4>
-              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                Son 24 saatte 12 başarısız ödeme. En yaygın neden: yetersiz bakiye. Kullanıcılara hatırlatma gönderilebilir.
-              </p>
+          {isAnalyzeLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="p-4 border rounded-lg">
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-muted rounded w-32 mb-2"></div>
+                    <div className="h-3 bg-muted rounded w-full"></div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="p-4 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
-              <h4 className="font-medium text-yellow-800 dark:text-yellow-200">Bekleyen İşlemler</h4>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                45 banka transferi manuel onay bekliyor. Otomatik onay sistemi kurulabilir.
-              </p>
+          ) : (
+            <div className="space-y-3">
+              {analysis.issues?.map((issue: any, index: number) => (
+                <div key={index} className={`p-4 border rounded-lg ${issue.severity === 'high' ? 'bg-red-50 dark:bg-red-950/20' :
+                  issue.severity === 'medium' ? 'bg-yellow-50 dark:bg-yellow-950/20' :
+                    'bg-blue-50 dark:bg-blue-950/20'
+                  }`}>
+                  <h4 className={`font-medium ${issue.severity === 'high' ? 'text-red-800 dark:text-red-200' :
+                    issue.severity === 'medium' ? 'text-yellow-800 dark:text-yellow-200' :
+                      'text-blue-800 dark:text-blue-200'
+                    }`}>
+                    {issue.title}
+                  </h4>
+                  <p className={`text-sm mt-1 ${issue.severity === 'high' ? 'text-red-700 dark:text-red-300' :
+                    issue.severity === 'medium' ? 'text-yellow-700 dark:text-yellow-300' :
+                      'text-blue-700 dark:text-blue-300'
+                    }`}>
+                    {issue.description}
+                  </p>
+                  {issue.suggestion && (
+                    <p className={`text-xs mt-2 ${issue.severity === 'high' ? 'text-red-600 dark:text-red-400' :
+                      issue.severity === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
+                        'text-blue-600 dark:text-blue-400'
+                      }`}>
+                      Öneri: {issue.suggestion}
+                    </p>
+                  )}
+                </div>
+              )) || (
+                  <div className="p-4 border rounded-lg bg-green-50 dark:bg-green-950/20">
+                    <h4 className="font-medium text-green-800 dark:text-green-200">Sistem Sağlıklı</h4>
+                    <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                      Ödeme sistemi normal çalışıyor, kritik sorun tespit edilmedi.
+                    </p>
+                  </div>
+                )}
+
+              {analysis.opportunities?.map((opportunity: unknown, index: number) => (
+                <div key={index} className="p-4 border rounded-lg bg-green-50 dark:bg-green-950/20">
+                  <h4 className="font-medium text-green-800 dark:text-green-200">{opportunity.title}</h4>
+                  <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                    {opportunity.description}
+                  </p>
+                  {opportunity.expectedGain && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                      Beklenen Fayda: {opportunity.expectedGain}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
-            <div className="p-4 border rounded-lg bg-green-50 dark:bg-green-950/20">
-              <h4 className="font-medium text-green-800 dark:text-green-200">Yüksek Başarı Oranı</h4>
-              <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                %89.2 başarı oranı sektör ortalamasının üzerinde. Mevcut ödeme altyapısı iyi çalışıyor.
-              </p>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

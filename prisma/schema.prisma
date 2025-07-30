@@ -176,6 +176,7 @@ model User {
   notificationLogs  NotificationLog[]
   userSessions      UserSession[]
 
+
   @@index([email])
   @@index([status])
   @@index([isPremium])
@@ -277,6 +278,7 @@ model Product {
   currency    String
   type        ProductType
   duration    String?
+  features    String[]    @default([])
   subscribers Int
   isActive    Boolean
   createdAt   DateTime    @default(now())
@@ -286,6 +288,8 @@ model Product {
   @@index([price])
   @@index([createdAt])
 }
+
+
 
 enum ProductType {
   subscription
